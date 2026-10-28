@@ -1,0 +1,33 @@
+# Uploaded files are served as static assets only — never executed.
+Options -Indexes -ExecCGI
+
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php5.c>
+    php_flag engine off
+</IfModule>
+
+<IfModule mod_mime.c>
+    RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .phps .cgi .pl .py
+    RemoveType .php .phtml .php3 .php4 .php5 .php7 .phps
+</IfModule>
+
+# Only allow image files to be requested from this folder.
+<FilesMatch "\.(php|phtml|phar|cgi|pl|py|sh|htm|html|svg|js|xml)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set Content-Security-Policy "default-src 'none'; sandbox"
+</IfModule>

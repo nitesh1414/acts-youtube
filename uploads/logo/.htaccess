@@ -1,0 +1,2 @@
+# Logo uploads folder. Inherits the protection rules from ../.htaccess
+Options -Indexes -ExecCGI

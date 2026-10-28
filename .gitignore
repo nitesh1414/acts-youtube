@@ -1,0 +1,19 @@
+# Local configuration and secrets
+/config.local.php
+/install.lock
+
+# Uploaded logos (keep the folders, not the files)
+/uploads/logo/*
+!/uploads/logo/.gitkeep
+!/uploads/logo/.htaccess
+
+# Logs
+/storage/logs/*
+!/storage/logs/.gitkeep
+*.log
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

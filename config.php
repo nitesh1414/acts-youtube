@@ -1,54 +1,50 @@
 <?php
-session_start();
+/**
+ * PayAccess — application configuration
+ * -----------------------------------------------------------------------------
+ * You normally do NOT need to edit this file. The installer creates
+ * `config.local.php` next to it, which holds your database credentials and
+ * site URL. The values below are safe defaults used when no local config
+ * exists (handy for development with XAMPP / MAMP defaults).
+ *
+ * If you prefer editing by hand: copy `config.example.php` to
+ * `config.local.php`, fill in your details, and you are done.
+ * -----------------------------------------------------------------------------
+ */
 
-// Database Configuration - Update these with your hosting details
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'pay_access_db');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-
-// Admin Credentials (Default)
-define('ADMIN_USERNAME', 'admin');
-define('ADMIN_PASSWORD', 'admin123');
-
-// Site URL (update with your domain, e.g., https://yourdomain.com/)
-define('SITE_URL', 'http://localhost/');
-
-// Connect to MySQL Database using PDO
-try {
-    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Database connection failed: " . $e->getMessage() . ". Please run install.php first if you haven't already.");
+// 1. Local overrides (created by install.php or copied manually).
+if (is_file(__DIR__ . '/config.local.php')) {
+    require_once __DIR__ . '/config.local.php';
 }
 
-// Function to fetch site settings
-function getSettings($pdo) {
-    $stmt = $pdo->query("SELECT * FROM settings LIMIT 1");
-    $settings = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$settings) {
-        return [
-            'logo' => '',
-            'logo_text' => 'PayAccess',
-            'razorpay_key_id' => '',
-            'razorpay_key_secret' => '',
-            'youtube_link' => '',
-            'amount' => '99.00'
-        ];
-    }
-    return $settings;
-}
+// 2. Defaults (only applied when the local config did not define them).
+defined('DB_HOST')    || define('DB_HOST', 'localhost');
+defined('DB_PORT')    || define('DB_PORT', '3306');
+defined('DB_NAME')    || define('DB_NAME', 'pay_access_db');
+defined('DB_USER')    || define('DB_USER', 'root');
+defined('DB_PASS')    || define('DB_PASS', '');
 
-// Check if admin is logged in
-function isAdminLoggedIn() {
-    return isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
-}
+// Absolute site URL including trailing slash, e.g. https://example.com/
+// Leave empty to auto-detect (recommended — works on localhost and sub-folders).
+defined('SITE_URL')   || define('SITE_URL', '');
 
-// Redirect if not logged in
-function requireAdminLogin() {
-    if (!isAdminLoggedIn()) {
-        header("Location: index.php");
-        exit;
-    }
-}
-?>
+// Set to true only while debugging on a local machine.
+defined('APP_DEBUG')  || define('APP_DEBUG', false);
+
+// Application timezone (used for all dates, receipts and reports).
+defined('APP_TIMEZONE') || define('APP_TIMEZONE', 'Asia/Kolkata');
+
+// 3. Fixed application constants.
+define('APP_NAME', 'PayAccess');
+define('APP_VERSION', '2.0.0');
+define('APP_ROOT', __DIR__);
+define('APP_START', microtime(true));
+
+// Upload limits for the admin logo uploader.
+define('LOGO_MAX_BYTES', 2 * 1024 * 1024); // 2 MB
+
+// Cookie used to remember a verified payment on the buyer's device.
+define('ACCESS_COOKIE', 'pa_access');
+
+// 4. Boot the application.
+require_once APP_ROOT . '/lib/bootstrap.php';
