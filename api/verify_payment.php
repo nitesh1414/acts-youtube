@@ -92,17 +92,31 @@ try {
 }
 
 // 3. Mark as paid and grant access.
-app()->payments->markSuccess($payment['id'], [
-    'payment_id' => $razorpayId,
-    'signature'  => $signature,
-    'method'     => isset($entity['method']) ? (string) $entity['method'] : null,
-]);
-app()->payments->logEvent($payment['id'], 'payment.captured', 'Payment verified successfully', [
-    'payment_id' => $razorpayId,
-]);
+try {
+    app()->payments->markSuccess($payment['id'], [
+        'payment_id' => $razorpayId,
+        'signature'  => $signature,
+        'method'     => isset($entity['method']) ? (string) $entity['method'] : null,
+    ]);
+    app()->payments->logEvent($payment['id'], 'payment.captured', 'Payment verified successfully', [
+        'payment_id' => $razorpayId,
+    ]);
 
-$fresh = app()->payments->find($payment['id']);
-$access = issue_access($fresh);
+    $fresh = app()->payments->find($payment['id']);
+    $access = issue_access($fresh);
+} catch (DatabaseException $e) {
+    app_log('critical', 'Payment verified but the database update failed', [
+        'payment_id' => $razorpayId,
+        'order_id'   => $orderId,
+        'error'      => $e->getMessage(),
+    ]);
+    json_response([
+        'error' => 'Your payment was verified, but we could not unlock the video automatically. '
+            . 'Please use “Restore access” with the same e-mail and mobile number, or contact support with '
+            . 'payment id ' . $razorpayId . '.',
+        'code'  => 'database_error',
+    ], 500);
+}
 
 json_response([
     'success'  => true,

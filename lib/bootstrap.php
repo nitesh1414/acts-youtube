@@ -19,6 +19,7 @@ require_once APP_ROOT . '/lib/youtube.php';
 require_once APP_ROOT . '/lib/settings.php';
 require_once APP_ROOT . '/lib/razorpay.php';
 require_once APP_ROOT . '/lib/payments.php';
+require_once APP_ROOT . '/lib/schema.php';
 require_once APP_ROOT . '/lib/icons.php';
 require_once APP_ROOT . '/lib/view.php';
 require_once APP_ROOT . '/lib/access.php';
@@ -58,6 +59,17 @@ set_exception_handler(function ($e) {
     $message = 'An unexpected error occurred. Please try again in a moment.';
     if (APP_DEBUG) {
         $message = get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
+    } elseif ($e instanceof DatabaseException) {
+        $message = database_error_hint($e);
+    }
+
+    // API / AJAX callers must always receive JSON, never an HTML error page —
+    // otherwise the browser shows "unexpected response" and hides the cause.
+    if (function_exists('wants_json') && wants_json()) {
+        json_response([
+            'error' => $message,
+            'code'  => $e instanceof DatabaseException ? 'database_error' : 'server_error',
+        ], 500);
     }
 
     if (function_exists('app') && app() !== null && !headers_sent()) {
@@ -182,19 +194,61 @@ define('PAYACCESS_INSTALLED', true);
 
 app(new App($GLOBALS['db']));
 
-// Friendly message when the installer never ran (tables missing).
+// Verify that every table and column the app needs actually exists. A v1
+// database (or a half-finished install) would otherwise fail later — for
+// example while creating a payment — with a confusing 500 error.
+$schemaReady = false;
 try {
-    $GLOBALS['db']->value('SELECT COUNT(*) FROM settings', [], 0);
-} catch (DatabaseException $e) {
-    if (is_file(APP_ROOT . '/install.php')) {
-        startup_error_page(
-            'Setup required',
-            '<p>The database exists but the tables have not been created yet.</p>'
-            . '<p>Open <a href="' . e(url('install.php')) . '">install.php</a> to finish the installation.</p>',
-            503
-        );
+    // update.php / install.php must be able to run while the schema is behind.
+    $schemaReady = defined('PAYACCESS_SKIP_SCHEMA_CHECK') || Schema::isCurrent($GLOBALS['db']);
+} catch (Throwable $e) {
+    app_log('critical', 'Schema check failed: ' . $e->getMessage());
+    $schemaReady = false;
+}
+
+if (!$schemaReady) {
+    $missing = [];
+    try {
+        $missing = Schema::missing($GLOBALS['db']);
+    } catch (Throwable $e) {
+        $missing = [];
     }
-    startup_error_page('Database not ready', '<p>The required database tables are missing.</p>', 503);
+
+    $details = '';
+    if ($missing !== []) {
+        $shown = array_slice($missing, 0, 4);
+        $rest = count($missing) - count($shown);
+        $details = '<p>Missing: <code>' . e(implode(', ', $shown))
+            . ($rest > 0 ? ' and ' . $rest . ' more' : '') . '</code></p>';
+    }
+
+    $updater = APP_ROOT . '/update.php';
+    $installer = APP_ROOT . '/install.php';
+
+    if (is_file($updater)) {
+        $action = '<p><a class="btn" href="' . e(url('update.php')) . '">Update the database</a></p>'
+            . '<p><small>Existing payments and settings are kept — the update only adds what is missing.</small></p>';
+    } elseif (is_file($installer)) {
+        $action = '<p><a class="btn" href="' . e(url('install.php')) . '">Run install.php</a></p>';
+    } else {
+        $action = '<p>Restore <code>update.php</code> from the package and open it in your browser.</p>';
+    }
+
+    // API callers (checkout, verification, webhook) must always get JSON — an
+    // HTML page is what used to surface as "unexpected response" in the browser.
+    if (wants_json()) {
+        json_response([
+            'error' => 'The site database needs an update before payments can work. '
+                . 'Open update.php once, then try again.',
+            'code'  => 'database_error',
+        ], 503);
+    }
+
+    startup_error_page(
+        'Database update required',
+        '<p>The database is missing tables or columns this version needs.</p>' . $details . $action,
+        503
+    );
 }
 
 /**
@@ -217,6 +271,8 @@ function startup_error_page($title, $html, $status = 500)
         . '.box{max-width:560px;background:rgba(15,23,42,.85);border:1px solid #1e2f4d;border-radius:18px;padding:36px;'
         . 'box-shadow:0 24px 60px rgba(0,0,0,.45);text-align:center}h1{font-size:1.4rem;margin:0 0 14px}'
         . 'p{margin:0 0 10px;color:#a9b8ce;line-height:1.65}code{background:#0b1526;padding:2px 6px;border-radius:6px;color:#c7d2fe;font-size:.9em}'
-        . 'a{color:#93c5fd}</style></head><body><div class="box"><h1>' . $safeTitle . '</h1>' . $html . '</div></body></html>';
+        . 'a{color:#93c5fd}.btn{display:inline-block;margin:8px 0 12px;padding:12px 22px;border-radius:12px;font-weight:700;'
+        . 'text-decoration:none;color:#fff;background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 12px 26px rgba(79,70,229,.35)}'
+        . 'small{color:#7f93b3}</style></head><body><div class="box"><h1>' . $safeTitle . '</h1>' . $html . '</div></body></html>';
     exit;
 }

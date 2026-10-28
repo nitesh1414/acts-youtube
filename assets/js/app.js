@@ -58,7 +58,11 @@
         try {
             data = await response.json();
         } catch (e) {
-            data = { error: 'The server returned an unexpected response. Please try again.' };
+            // Non-JSON body: usually a PHP fatal error or a server misconfiguration.
+            data = {
+                error: 'The server returned an unexpected response (HTTP ' + response.status + '). '
+                    + 'Please try again — if it keeps failing, the site owner should check storage/logs.'
+            };
         }
 
         if (!response.ok) {

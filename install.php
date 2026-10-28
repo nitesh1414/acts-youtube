@@ -13,6 +13,8 @@ define('APP_DEBUG', false);
 define('APP_TIMEZONE', 'Asia/Kolkata');
 
 require_once APP_ROOT . '/lib/helpers.php';
+require_once APP_ROOT . '/lib/db.php';
+require_once APP_ROOT . '/lib/schema.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     @session_start();
@@ -20,7 +22,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $configFile = APP_ROOT . '/config.local.php';
 $lockFile   = APP_ROOT . '/install.lock';
-$schemaFile = APP_ROOT . '/sql/schema.sql';
 
 $locked = is_file($lockFile);
 
@@ -105,9 +106,9 @@ $checks = [
         'required' => false,
     ],
     [
-        'label'    => 'Schema file present',
-        'ok'       => is_file($schemaFile),
-        'detail'   => is_file($schemaFile) ? 'sql/schema.sql found' : 'sql/schema.sql is missing',
+        'label'    => 'Schema definition present',
+        'ok'       => is_file(APP_ROOT . '/lib/schema.php') && is_file(APP_ROOT . '/lib/db.php'),
+        'detail'   => 'lib/schema.php found',
         'required' => true,
     ],
 ];
@@ -196,12 +197,17 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
             ));
             $pdo->exec(sprintf('USE `%s`', $values['db_name']));
 
-            $schema = (string) file_get_contents($schemaFile);
-            $schema = preg_replace('/^\s*--.*$/m', '', $schema);
-            $statements = array_filter(array_map('trim', explode(';', $schema)));
-            foreach ($statements as $statement) {
-                $pdo->exec($statement);
+            // Create/upgrade every table from lib/schema.php (single source of truth).
+            $database = new Database(
+                sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $values['db_host'], $values['db_port'], $values['db_name']),
+                $values['db_user'],
+                $values['db_pass']
+            );
+            $migration = Schema::migrate($database, null);
+            if (!$migration['ok']) {
+                throw new RuntimeException('Could not create the database tables: ' . implode(' ', $migration['errors']));
             }
+            $pdo = $database->pdo();
 
             // --- Admin account ----------------------------------------------
             $existingAdmin = $pdo->prepare('SELECT id FROM admin_users WHERE username = ? LIMIT 1');
@@ -295,6 +301,7 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            Schema::clearMarker();
             @file_put_contents($lockFile, 'Installed ' . date('c') . PHP_EOL);
 
             $installed = true;

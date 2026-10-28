@@ -57,7 +57,7 @@ DirectoryIndex index.php
 #
 #   location ~ /\. { deny all; }
 #   location ~* ^/(config(\.local|\.example)?\.php|install\.lock)$ { deny all; }
-#   location ~ ^/(lib|sql|templates|storage)/ { deny all; }
+#   location ~ ^/(lib|sql|templates|storage|tools)/ { deny all; }
 #   location ^~ /uploads/ { location ~ \.php$ { deny all; } }
 #   location / { try_files $uri $uri/ /index.php?$query_string; }
 # -----------------------------------------------------------------------------

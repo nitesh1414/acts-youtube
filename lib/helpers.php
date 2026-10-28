@@ -522,6 +522,29 @@ function app_log($level, $message, array $context = [])
 }
 
 /**
+ * Turn a database error into something a site owner can act on.
+ */
+function database_error_hint(Throwable $error)
+{
+    $message = (string) $error->getMessage();
+
+    if (preg_match('/Unknown column|doesn\'t exist|no such (table|column)|Table .* doesn\'t exist/i', $message)) {
+        return 'The database schema is out of date. Open update.php in your browser to add the missing '
+            . 'tables and columns (your data is kept).';
+    }
+    if (preg_match('/Access denied|Connection refused|Unknown database|SQLSTATE\[HY000\]\s*\[104/i', $message)) {
+        return 'The database could not be reached. Check the credentials in config.local.php.';
+    }
+    if (preg_match('/Duplicate entry/i', $message)) {
+        return 'A duplicate record was detected. Please try again.';
+    }
+    if (defined('APP_DEBUG') && APP_DEBUG) {
+        return $message;
+    }
+    return 'A database error occurred. Please try again in a moment.';
+}
+
+/**
  * Truncate a value so it fits a VARCHAR column.
  */
 function db_limit($value, $length)

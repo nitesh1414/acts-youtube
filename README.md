@@ -25,7 +25,7 @@ no build step, no Node.js required.
 12. [Nginx configuration](#12-nginx-configuration)
 13. [Customising the design](#13-customising-the-design)
 14. [Troubleshooting](#14-troubleshooting)
-15. [Upgrading from v1 (logo URL → upload)](#15-upgrading-from-v1-logo-url--upload)
+15. [Upgrading from v1 / the database updater](#15-upgrading-from-v1--the-database-updater)
 16. [Manual QA checklist](#16-manual-qa-checklist)
 
 ---
@@ -247,6 +247,7 @@ Visitor                App                                  Razorpay
 ├── sw.js                     Service worker (offline fallback)
 ├── offline.html              Offline page
 ├── install.php               Installer — delete after use
+├── update.php                Database updater (adds missing tables/columns) — delete after use
 ├── config.php                Bootstrap + defaults (rarely edited)
 ├── config.example.php        Template for config.local.php (manual installs)
 ├── config.local.php          Your credentials (created by the installer, git-ignored)
@@ -255,6 +256,7 @@ Visitor                App                                  Razorpay
 │   ├── bootstrap.php         Errors, headers, session, DB connection
 │   ├── app.php               Service container (db, settings, auth, payments)
 │   ├── db.php                PDO wrapper (query/all/first/value/insert/update/tx)
+│   ├── schema.php            Schema definition + verifier + additive migrator
 │   ├── helpers.php           Escaping, URLs, money, dates, validation, logging
 │   ├── csrf.php              CSRF tokens
 │   ├── auth.php              Admin accounts, login throttling, password policy
@@ -281,7 +283,8 @@ Visitor                App                                  Razorpay
 │   └── img/                  App icons + favicon
 ├── uploads/logo/             Uploaded logos (writable, protected)
 ├── storage/logs/             Application log
-├── sql/schema.sql            Full schema + default row
+├── sql/schema.sql            Full schema + default row (generated — see note below)
+├── tools/build-schema.php    Regenerates sql/schema.sql from lib/schema.php (dev only)
 └── .htaccess                 Apache hardening (deny lib/sql/templates/storage, headers, caching)
 ```
 
@@ -299,6 +302,15 @@ Visitor                App                                  Razorpay
 
 Statuses: `pending` → `success` | `failed`. Access is granted only for `success` rows with a
 future `access_expires_at`.
+
+The schema is defined **once**, in `lib/schema.php`. The app compares the live database against
+that definition on every boot (cached in `storage/schema-*.ok`), and `update.php` brings an older
+database up to date by only *adding* tables, columns and indexes. `sql/schema.sql` is a generated
+copy of the same definition — after editing `Schema::tables()`, regenerate it with:
+
+```bash
+php tools/build-schema.php
+```
 
 ---
 
@@ -335,7 +347,7 @@ server {
     index index.php;
 
     location ~ /\.            { deny all; }
-    location ~ ^/(lib|sql|templates|storage)/ { deny all; }
+    location ~ ^/(lib|sql|templates|storage|tools)/ { deny all; }
     location ~ ^/(config(\.local|\.example)?\.php|install\.lock)$ { deny all; }
 
     location ^~ /uploads/ {
@@ -386,6 +398,9 @@ still renders, but admin sign-in is disabled with an explanatory message (by des
 | Symptom | Cause / fix |
 |---|---|
 | "Setup required" page | Database not reachable or tables missing → run `install.php`, check `config.local.php` |
+| **"Database update required" page** | The database was created by v1 or an interrupted install. Open `update.php`, press **Run the update**, then delete the file |
+| **Checkout fails: "The server returned an unexpected response"** | The API returned a non-JSON error (usually a database column/table missing). Open `update.php`; details are in `storage/logs`. Run the updater even if you already ran `install.php` |
+| API returns `{"error":…,"code":"database_error"}` | Same cause: schema behind. The message tells you to open `update.php` (permission errors instead point at `config.local.php`) |
 | Admin sign-in says sessions are unavailable | `session.save_path` not writable → fix PHP config (the app tries the temp dir first) |
 | Pay button disabled / "Payments are not configured" | Razorpay Key ID or Secret empty in *Site settings → Payments* |
 | Razorpay popup does not open | `checkout.razorpay.com` blocked (ad-blocker, CSP, no internet) — check the browser console |
@@ -398,12 +413,38 @@ still renders, but admin sign-in is disabled with an explanatory message (by des
 
 ---
 
-## 15. Upgrading from v1 (logo URL → upload)
+## 15. Upgrading from v1 / the database updater
 
-Version 2 replaces the `logo` URL column with an uploaded file stored in `logo_path`.
-The installer and `sql/schema.sql` create the new column set automatically for fresh installs.
+Version 2 replaced the `logo` URL column with an uploaded file stored in `logo_path`, and added
+`admin_users`, `payment_events` and `rate_events`. Fresh installs get everything from
+`install.php`.
 
-If you are upgrading an existing v1 database:
+### The easy path (recommended)
+
+1. Upload the new files over the old ones — keep `config.local.php` and `uploads/`.
+2. Open **`https://your-site/update.php`** in a browser.
+   * It lists exactly what is missing (tables, columns, indexes, settings row).
+   * Press **Run the update**. Everything is additive: no table, column or row is ever dropped,
+     and old payments/settings are copied into the new columns where it makes sense
+     (`logo_text` → `site_name`, the old `logo` URL → `logo_path`, `youtube_link` →
+     `youtube_video_url`).
+   * A v1 database has no admin accounts, so the same page then asks you to create the first one.
+3. Delete `update.php` (and `install.php`) once the site works.
+
+Running the updater twice is harmless — the second run reports *"Everything is up to date"*.
+
+> If the site shows **"Database update required"** instead of a page, that *is* the updater asking
+> to be run. It is shown whenever the database is behind, so a half-finished install or a
+> restored backup can never turn into a checkout 500.
+
+### Why the updater matters for payments
+
+`api/create_order.php` writes to the `payments` table. If a column such as `currency` is missing,
+MySQL rejects the INSERT, the API used to answer with an HTML error page, and the browser showed
+*"The server returned an unexpected response."* The updater fixes the root cause; the API now also
+answers with a JSON `database_error` message that names the problem and links here.
+
+### Manual SQL (only if you cannot run update.php)
 
 ```sql
 ALTER TABLE settings
@@ -420,9 +461,6 @@ ALTER TABLE settings
 
 UPDATE settings SET site_name = logo_text WHERE site_name = 'PayAccess' AND logo_text <> 'PayAccess';
 
--- Optional: keep old image URLs working by linking them as a remote logo.
--- (Better: download the image and upload it again in Branding.)
-
 ALTER TABLE payments
     ADD COLUMN currency CHAR(3) NOT NULL DEFAULT 'INR',
     ADD COLUMN signature VARCHAR(191) DEFAULT NULL,
@@ -436,10 +474,13 @@ ALTER TABLE payments
     ADD COLUMN updated_at DATETIME DEFAULT NULL;
 ```
 
-Then create `sql/schema.sql`'s `admin_users`, `payment_events` and `rate_events` tables and
-run `install.php` once with a new admin username (it skips existing tables and creates the
-account). Old rows have no access token — open *Payments → payment → Regenerate access link*
-for customers who need access, or let them use `/restore.php`.
+Then create `admin_users`, `payment_events` and `rate_events` from `sql/schema.sql`, and create an
+admin with `update.php` (or let `install.php` add one). Old rows have no access token — open
+*Payments → payment → Regenerate access link* for customers who need access, or let them use
+`/restore.php`.
+
+> **Keeping the old logo:** a v1 `logo` URL keeps working (it is carried into `logo_path` and
+> rendered as a remote image). Upload a file in *Site settings → Branding* when convenient.
 
 ---
 
@@ -461,6 +502,10 @@ Because payments touch money, verify these after any change:
    `.php` renamed to `.png` is rejected; 3 MB file is rejected; remove checkbox restores the mark.
 10. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
 11. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
+12. **Upgrade path** — restore a v1 dump into a test database, load the site → "Database update
+    required", open `update.php` → items listed → Run the update → old payment still visible in
+    *Admin → Payments*, old logo still shown → checkout completes. Run `update.php` again →
+    "Everything is up to date".
 
 ---
 

@@ -1,13 +1,13 @@
 -- =============================================================================
 -- PayAccess — MySQL schema (MySQL 5.7+ / MariaDB 10.3+)
--- The installer (install.php) runs this automatically. For a manual setup:
---   1. create a database (utf8mb4)
---   2. import this file
---   3. create config.local.php with your credentials (see config.example.php)
---   4. open the site and sign in with the admin account created by the installer
+-- Generated from lib/schema.php by tools/build-schema.php — do not edit by hand.
+--
+-- Fresh install: `install.php` does all of this for you.
+-- Manual install: import this file into an empty utf8mb4 database.
+-- Existing (v1) database: open `update.php` instead — it adds what is missing
+-- without touching your data.
 -- =============================================================================
 
--- Site settings: a single row (id = 1).
 CREATE TABLE IF NOT EXISTS `settings` (
     `id` TINYINT UNSIGNED NOT NULL DEFAULT 1,
     `site_name` VARCHAR(120) NOT NULL DEFAULT 'PayAccess',
@@ -30,7 +30,6 @@ CREATE TABLE IF NOT EXISTS `settings` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Admin accounts (bcrypt hashes).
 CREATE TABLE IF NOT EXISTS `admin_users` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `username` VARCHAR(32) NOT NULL,
@@ -46,7 +45,6 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
     UNIQUE KEY `uniq_admin_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Payment records (one row per checkout attempt).
 CREATE TABLE IF NOT EXISTS `payments` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `user_name` VARCHAR(120) NOT NULL,
@@ -71,13 +69,12 @@ CREATE TABLE IF NOT EXISTS `payments` (
     UNIQUE KEY `uniq_payments_order` (`order_id`),
     UNIQUE KEY `uniq_payments_payment` (`payment_id`),
     UNIQUE KEY `uniq_payments_access` (`access_token`),
-    KEY `idx_payments_status_created` (`status`, `created_at`),
+    KEY `idx_payments_status_date` (`status`, `created_at`),
     KEY `idx_payments_email` (`user_email`),
     KEY `idx_payments_mobile` (`user_mobile`),
-    KEY `idx_payments_access_expiry` (`access_expires_at`)
+    KEY `idx_payments_access_end` (`access_expires_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Audit trail for each payment (checkout, verification, webhook, access).
 CREATE TABLE IF NOT EXISTS `payment_events` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `payment_id` INT UNSIGNED DEFAULT NULL,
@@ -89,7 +86,6 @@ CREATE TABLE IF NOT EXISTS `payment_events` (
     KEY `idx_events_payment` (`payment_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Rate-limit hits (admin logins, checkout attempts, access restore).
 CREATE TABLE IF NOT EXISTS `rate_events` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `bucket` VARCHAR(40) NOT NULL,
@@ -100,5 +96,6 @@ CREATE TABLE IF NOT EXISTS `rate_events` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Default settings row (ignored when it already exists).
-INSERT IGNORE INTO `settings` (`id`, `site_name`, `logo_text`, `tagline`, `amount`, `currency`, `access_days`, `theme_color`, `updated_at`)
+INSERT IGNORE INTO `settings`
+    (`id`, `site_name`, `logo_text`, `tagline`, `amount`, `currency`, `access_days`, `theme_color`, `updated_at`)
 VALUES (1, 'PayAccess', 'PayAccess', 'Get instant access to our exclusive video', 199.00, 'INR', 30, '#4f46e5', NOW());

@@ -97,6 +97,11 @@ function capture_template($__template, array $__data)
  */
 function abort($status = 404, $message = 'The page you are looking for could not be found.', $title = '')
 {
+    // API endpoints and AJAX calls always get JSON back.
+    if (wants_json()) {
+        json_response(['error' => $message, 'status' => (int) $status], (int) $status);
+    }
+
     if (!headers_sent()) {
         http_response_code((int) $status);
     }

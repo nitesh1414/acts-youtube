@@ -93,8 +93,15 @@ final class Settings
 
     public function hasLogo()
     {
-        $path = $this->all()['logo_path'];
-        return $path !== '' && is_file(APP_ROOT . '/' . ltrim($path, '/'));
+        $path = trim((string) $this->all()['logo_path']);
+        if ($path === '') {
+            return false;
+        }
+        // A logo carried over from v1 can still be a remote URL.
+        if (preg_match('#^https?://#i', $path)) {
+            return true;
+        }
+        return is_file(APP_ROOT . '/' . ltrim($path, '/'));
     }
 
     /**
@@ -105,7 +112,11 @@ final class Settings
         if (!$this->hasLogo()) {
             return '';
         }
-        return media_url(ltrim($this->all()['logo_path'], '/'));
+        $path = trim((string) $this->all()['logo_path']);
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+        return media_url(ltrim($path, '/'));
     }
 
     /**
@@ -113,8 +124,11 @@ final class Settings
      */
     public function logoAbsolutePath()
     {
-        $path = $this->all()['logo_path'];
-        return $path === '' ? '' : APP_ROOT . '/' . ltrim($path, '/');
+        $path = trim((string) $this->all()['logo_path']);
+        if ($path === '' || preg_match('#^https?://#i', $path)) {
+            return '';
+        }
+        return APP_ROOT . '/' . ltrim($path, '/');
     }
 
     /**
