@@ -133,6 +133,13 @@ function query_int($key, $default = 0)
  */
 function json_response($data, $status = 200)
 {
+    // Anything printed before this point (PHP warning, stray echo) is dropped:
+    // a single character in front of the body makes `JSON.parse` fail and turns
+    // into "The server returned an unexpected response" in the browser.
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
+
     if (!headers_sent()) {
         http_response_code($status);
         header('Content-Type: application/json; charset=utf-8');

@@ -17,10 +17,10 @@ define('DB_PASS', '');
 define('SITE_URL', '');
 
 // Show detailed error messages (never enable this in production).
-define('APP_DEBUG', false);
+defined('APP_DEBUG') || define('APP_DEBUG', false);
 
 // Timezone used for reports and receipts.
-define('APP_TIMEZONE', 'Asia/Kolkata');
+defined('APP_TIMEZONE') || define('APP_TIMEZONE', 'Asia/Kolkata');
 
 // ---- Optional tuning --------------------------------------------------------
 // Maximum size of an uploaded logo, in bytes (default 2 MB).

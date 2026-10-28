@@ -8,10 +8,10 @@
  * installer stay in sync. Not used at runtime.
  */
 
-define('APP_ROOT', dirname(__DIR__));
-define('APP_NAME', 'PayAccess');
-define('APP_DEBUG', false);
-define('APP_TIMEZONE', 'Asia/Kolkata');
+defined('APP_ROOT')     || define('APP_ROOT', dirname(__DIR__));
+defined('APP_NAME')     || define('APP_NAME', 'PayAccess');
+defined('APP_DEBUG')    || define('APP_DEBUG', false);
+defined('APP_TIMEZONE') || define('APP_TIMEZONE', 'Asia/Kolkata');
 
 require_once APP_ROOT . '/lib/helpers.php';
 require_once APP_ROOT . '/lib/db.php';

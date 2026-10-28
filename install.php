@@ -6,11 +6,11 @@
  * Delete this file (and install.lock when you want to reinstall) afterwards.
  */
 
-define('APP_ROOT', __DIR__);
-define('APP_NAME', 'PayAccess');
-define('APP_VERSION', '2.0.0');
-define('APP_DEBUG', false);
-define('APP_TIMEZONE', 'Asia/Kolkata');
+defined('APP_ROOT')     || define('APP_ROOT', __DIR__);
+defined('APP_NAME')     || define('APP_NAME', 'PayAccess');
+defined('APP_VERSION')  || define('APP_VERSION', '2.0.0');
+defined('APP_DEBUG')    || define('APP_DEBUG', false);
+defined('APP_TIMEZONE') || define('APP_TIMEZONE', 'Asia/Kolkata');
 
 require_once APP_ROOT . '/lib/helpers.php';
 require_once APP_ROOT . '/lib/db.php';
@@ -291,8 +291,8 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 . "define('DB_USER', " . var_export($values['db_user'], true) . ");\n"
                 . "define('DB_PASS', " . var_export($values['db_pass'], true) . ");\n\n"
                 . "define('SITE_URL', " . var_export(rtrim($values['site_url'], '/') . ($values['site_url'] !== '' ? '/' : ''), true) . ");\n"
-                . "define('APP_DEBUG', false);\n"
-                . "define('APP_TIMEZONE', 'Asia/Kolkata');\n";
+                . "defined('APP_DEBUG') || define('APP_DEBUG', false);\n"
+                . "defined('APP_TIMEZONE') || define('APP_TIMEZONE', 'Asia/Kolkata');\n";
 
             if (is_writable(APP_ROOT) || (is_file($configFile) && is_writable($configFile))) {
                 if (@file_put_contents($configFile, $configContent) !== false) {

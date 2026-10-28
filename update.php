@@ -15,11 +15,6 @@
 // Allow the app to boot while the database schema is still behind.
 define('PAYACCESS_SKIP_SCHEMA_CHECK', true);
 
-// config.php normally defines these; this file has to work before (and without) it.
-defined('APP_ROOT') || define('APP_ROOT', __DIR__);
-defined('APP_DEBUG') || define('APP_DEBUG', false);
-defined('APP_TIMEZONE') || define('APP_TIMEZONE', 'Asia/Kolkata');
-
 require_once __DIR__ . '/lib/helpers.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -29,7 +24,8 @@ if (session_status() === PHP_SESSION_NONE) {
 /* -------------------------------------------------------------------------
  * Configuration + database connection
  * ---------------------------------------------------------------------- */
-$configFile = APP_ROOT . '/config.local.php';
+// __DIR__, not APP_ROOT: config.php has not been loaded yet at this point.
+$configFile = __DIR__ . '/config.local.php';
 $configError = '';
 
 if (!is_file($configFile)) {
@@ -45,9 +41,10 @@ if ($configError === '') {
     require_once __DIR__ . '/lib/schema.php';
 }
 
-if (!defined('APP_VERSION')) {
-    define('APP_VERSION', '2.0.0');
-}
+// Only true when config.php never ran (no config.local.php): give the page the
+// few constants it needs. Never redefine what the app already defined.
+defined('APP_ROOT')    || define('APP_ROOT', __DIR__);
+defined('APP_VERSION') || define('APP_VERSION', '2.0.0');
 
 /* -------------------------------------------------------------------------
  * State
@@ -147,6 +144,27 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $db !== null) {
 $schemaCurrent = $db !== null && $missing === [];
 
 /* -------------------------------------------------------------------------
+ * Environment (helps diagnose "it still does not work" reports)
+ * ---------------------------------------------------------------------- */
+$serverVersion = 'unknown';
+if ($db !== null) {
+    try {
+        $serverVersion = (string) $db->value('SELECT VERSION()', [], 'unknown');
+    } catch (Throwable $e) {
+        $serverVersion = 'unknown';
+    }
+}
+
+$environment = [
+    ['PHP ' . PHP_VERSION, version_compare(PHP_VERSION, '7.4', '>=')],
+    ['MySQL/MariaDB ' . $serverVersion, $db !== null],
+    ['PDO MySQL', extension_loaded('pdo_mysql')],
+    ['Razorpay HTTPS client', function_exists('curl_init') || (bool) ini_get('allow_url_fopen')],
+    ['uploads/ writable', is_dir(APP_ROOT . '/uploads') && is_writable(APP_ROOT . '/uploads')],
+    ['storage/ writable', is_dir(APP_ROOT . '/storage') && is_writable(APP_ROOT . '/storage')],
+];
+
+/* -------------------------------------------------------------------------
  * View
  * ---------------------------------------------------------------------- */
 function update_head($title)
@@ -232,6 +250,19 @@ update_head('Database update');
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
+
+        <details style="margin:18px 0 0">
+            <summary style="cursor:pointer;font-size:.88rem;color:#a5b4fc">Environment check</summary>
+            <ul class="checks" style="margin-top:10px">
+                <?php foreach ($environment as $item): ?>
+                    <li class="<?= $item[1] ? '' : 'bad' ?>">
+                        <?= $item[1] ? '✓' : '✗' ?> <?= e($item[0]) ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+            <p class="muted">Errors are written to <code>storage/logs</code>. If the public site or the
+                Pay button still fails after the update, check that log first.</p>
+        </details>
 
         <?php if ($report !== null): ?>
             <div class="alert <?= $report['ok'] ? 'ok' : 'err' ?>">

@@ -408,6 +408,7 @@ still renders, but admin sign-in is disabled with an explanatory message (by des
 | Logo upload rejected | Not a PNG/JPEG/GIF/WEBP/ICO, larger than 2 MB, or over 6000 px; check folder permissions |
 | Upload folder errors | `chmod 755 uploads uploads/logo` (or `775` when PHP runs as another user) |
 | `install.lock` blocks reinstalling | Delete `install.lock` (and `install.php` afterwards) |
+| PHP warnings/notices printed at the top of a page | `display_errors` is `On` (default in XAMPP). Set `display_errors = Off` in `php.ini`; the app already logs everything to `storage/logs` |
 | Buyer lost the link | *Payments → open payment → copy access link*, or send them `/restore.php` |
 | Demo mode left on | *Site settings → Payments → Demo mode off* — otherwise visitors get free access |
 
@@ -432,6 +433,9 @@ Version 2 replaced the `logo` URL column with an uploaded file stored in `logo_p
 3. Delete `update.php` (and `install.php`) once the site works.
 
 Running the updater twice is harmless — the second run reports *"Everything is up to date"*.
+An **Environment check** on the same page lists the PHP/MySQL versions, the PDO driver, the
+Razorpay HTTPS client and whether `uploads/` and `storage/` are writable — the usual reasons a
+local XAMPP install still misbehaves after the update.
 
 > If the site shows **"Database update required"** instead of a page, that *is* the updater asking
 > to be run. It is shown whenever the database is behind, so a half-finished install or a

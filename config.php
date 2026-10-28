@@ -35,16 +35,19 @@ defined('APP_DEBUG')  || define('APP_DEBUG', false);
 defined('APP_TIMEZONE') || define('APP_TIMEZONE', 'Asia/Kolkata');
 
 // 3. Fixed application constants.
-define('APP_NAME', 'PayAccess');
-define('APP_VERSION', '2.0.0');
-define('APP_ROOT', __DIR__);
-define('APP_START', microtime(true));
+//    Guarded with defined() so the app also boots when another entry point
+//    (install.php, update.php) or config.local.php got there first — a plain
+//    define() would emit "Constant already defined" warnings.
+defined('APP_NAME')       || define('APP_NAME', 'PayAccess');
+defined('APP_VERSION')    || define('APP_VERSION', '2.0.0');
+defined('APP_ROOT')       || define('APP_ROOT', __DIR__);
+defined('APP_START')      || define('APP_START', microtime(true));
 
 // Upload limits for the admin logo uploader.
-define('LOGO_MAX_BYTES', 2 * 1024 * 1024); // 2 MB
+defined('LOGO_MAX_BYTES') || define('LOGO_MAX_BYTES', 2 * 1024 * 1024); // 2 MB
 
 // Cookie used to remember a verified payment on the buyer's device.
-define('ACCESS_COOKIE', 'pa_access');
+defined('ACCESS_COOKIE')  || define('ACCESS_COOKIE', 'pa_access');
 
 // 4. Boot the application.
 require_once APP_ROOT . '/lib/bootstrap.php';

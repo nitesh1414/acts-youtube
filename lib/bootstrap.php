@@ -32,7 +32,11 @@ defined('ENABLE_CSP') || define('ENABLE_CSP', true);
 // 2. Error handling
 // -----------------------------------------------------------------------------
 error_reporting(APP_DEBUG ? E_ALL : (E_ALL & ~E_DEPRECATED & ~E_NOTICE & ~E_USER_DEPRECATED));
-ini_set('display_errors', APP_DEBUG ? '1' : '0');
+// JSON endpoints never print PHP diagnostics: they are logged, and a warning in
+// the body would break the response for the browser. Debug details still reach
+// the JSON error message (see the exception handler).
+$showErrors = APP_DEBUG && !wants_json();
+ini_set('display_errors', $showErrors ? '1' : '0');
 ini_set('log_errors', '1');
 
 set_error_handler(function ($severity, $message, $file, $line) {
