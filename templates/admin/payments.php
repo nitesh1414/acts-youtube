@@ -117,11 +117,11 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                                 </div>
                             </td>
                             <td class="mono small"><?= e(display_mobile($payment['user_mobile'])) ?></td>
-                            <td class="strong"><?= e(money_exact($payment['amount'], $payment['currency'])) ?></td>
+                            <td class="strong"><?= e(money_exact($payment['amount'], $payment['currency'] ?? 'INR')) ?></td>
                             <td><span class="badge badge--<?= e($payment['status']) ?>"><?= e(ucfirst($payment['status'])) ?></span></td>
                             <td class="mono tiny muted">
-                                <?= e($payment['order_id'] ?: '—') ?><br>
-                                <?= e($payment['payment_id'] ?: '') ?>
+                                <?= e(!empty($payment['order_id']) ? $payment['order_id'] : '—') ?><br>
+                                <?= e(!empty($payment['payment_id']) ? $payment['payment_id'] : '') ?>
                             </td>
                             <td class="muted small"><?= e(date_display($payment['created_at'])) ?></td>
                             <td class="right">

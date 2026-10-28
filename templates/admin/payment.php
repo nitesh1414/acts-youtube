@@ -3,8 +3,8 @@
 /** @var array<string, mixed>             $payment */
 /** @var array<int, array<string, mixed>> $events */
 /** @var string                           $accessLink */
-$currency = (string) $payment['currency'];
-$token = (string) $payment['access_token'];
+$currency = isset($payment['currency']) && $payment['currency'] !== '' ? (string) $payment['currency'] : 'INR';
+$token = isset($payment['access_token']) ? (string) $payment['access_token'] : '';
 $accessValid = Payments::accessIsValid($payment);
 $daysLeft = access_days_left($payment);
 ?>
@@ -31,7 +31,7 @@ $daysLeft = access_days_left($payment);
         <dl class="detail-list">
             <div><dt>Payment ID</dt>
                 <dd class="mono">
-                    <?= e($payment['payment_id'] ?: '—') ?>
+                    <?= e(!empty($payment['payment_id']) ? $payment['payment_id'] : '—') ?>
                     <?php if ($payment['payment_id']): ?>
                         <button type="button" class="icon-btn icon-btn--xs" data-copy="<?= e($payment['payment_id']) ?>" title="Copy"><?= icon('copy', 14) ?></button>
                     <?php endif; ?>
@@ -39,17 +39,17 @@ $daysLeft = access_days_left($payment);
             </div>
             <div><dt>Order ID</dt>
                 <dd class="mono">
-                    <?= e($payment['order_id'] ?: '—') ?>
+                    <?= e(!empty($payment['order_id']) ? $payment['order_id'] : '—') ?>
                     <?php if ($payment['order_id']): ?>
                         <button type="button" class="icon-btn icon-btn--xs" data-copy="<?= e($payment['order_id']) ?>" title="Copy"><?= icon('copy', 14) ?></button>
                     <?php endif; ?>
                 </dd>
             </div>
-            <div><dt>Method</dt><dd><?= e($payment['method'] ?: '—') ?></dd></div>
+            <div><dt>Method</dt><dd><?= e(!empty($payment['method']) ? $payment['method'] : '—') ?></dd></div>
             <div><dt>Created</dt><dd><?= e(date_display($payment['created_at'])) ?></dd></div>
             <div><dt>Paid at</dt><dd><?= e(date_display($payment['paid_at'])) ?></dd></div>
-            <div><dt>IP address</dt><dd class="mono small"><?= e($payment['ip_address'] ?: '—') ?></dd></div>
-            <div><dt>Device</dt><dd class="tiny muted"><?= e(text_limit($payment['user_agent'] ?: '—', 90)) ?></dd></div>
+            <div><dt>IP address</dt><dd class="mono small"><?= e(!empty($payment['ip_address']) ? $payment['ip_address'] : '—') ?></dd></div>
+            <div><dt>Device</dt><dd class="tiny muted"><?= e(text_limit(!empty($payment['user_agent']) ? $payment['user_agent'] : '—', 90)) ?></dd></div>
             <?php if (!empty($payment['notes'])): ?>
                 <div><dt>Notes</dt><dd class="small"><?= e($payment['notes']) ?></dd></div>
             <?php endif; ?>

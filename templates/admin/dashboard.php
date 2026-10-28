@@ -185,7 +185,7 @@ $chartTotal = array_sum(array_column($chart, 'total'));
                                     </div>
                                 </div>
                             </td>
-                            <td class="strong"><?= e(money_exact($payment['amount'], $payment['currency'])) ?></td>
+                            <td class="strong"><?= e(money_exact($payment['amount'], $payment['currency'] ?? 'INR')) ?></td>
                             <td><span class="badge badge--<?= e($payment['status']) ?>"><?= e(ucfirst($payment['status'])) ?></span></td>
                             <td class="muted small"><?= e(date_display($payment['created_at'])) ?></td>
                             <td class="right">

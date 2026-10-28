@@ -6,7 +6,8 @@ $embedUrl = youtube_embed_url($videoUrl, true);
 $channel = (string) $settings['youtube_channel_url'];
 $daysLeft = access_days_left($payment);
 $accessLink = url('success.php?t=' . $payment['access_token']);
-$amountLabel = money_exact($payment['amount'], $payment['currency']);
+$currency = isset($payment['currency']) && $payment['currency'] !== '' ? $payment['currency'] : 'INR';
+$amountLabel = money_exact($payment['amount'], $currency);
 ?>
 <section class="section section--tight">
     <div class="wrap success-wrap">
@@ -62,10 +63,10 @@ $amountLabel = money_exact($payment['amount'], $payment['currency']);
                     <div><dt>Name</dt><dd><?= e($payment['user_name']) ?></dd></div>
                     <div><dt>Email</dt><dd><?= e($payment['user_email']) ?></dd></div>
                     <div><dt>Mobile</dt><dd><?= e(display_mobile($payment['user_mobile'])) ?></dd></div>
-                    <div><dt>Payment ID</dt><dd class="mono"><?= e($payment['payment_id'] ?: '—') ?></dd></div>
-                    <div><dt>Order ID</dt><dd class="mono"><?= e($payment['order_id'] ?: '—') ?></dd></div>
-                    <div><dt>Paid on</dt><dd><?= e(date_display($payment['paid_at'] ?: $payment['created_at'])) ?></dd></div>
-                    <div><dt>Access until</dt><dd><?= e(date_display($payment['access_expires_at'])) ?></dd></div>
+                    <div><dt>Payment ID</dt><dd class="mono"><?= e(!empty($payment['payment_id']) ? $payment['payment_id'] : '—') ?></dd></div>
+                    <div><dt>Order ID</dt><dd class="mono"><?= e(!empty($payment['order_id']) ? $payment['order_id'] : '—') ?></dd></div>
+                    <div><dt>Paid on</dt><dd><?= e(date_display(!empty($payment['paid_at']) ? $payment['paid_at'] : $payment['created_at'])) ?></dd></div>
+                    <div><dt>Access until</dt><dd><?= e(date_display(isset($payment['access_expires_at']) ? $payment['access_expires_at'] : null)) ?></dd></div>
                 </dl>
 
                 <div class="receipt__actions">

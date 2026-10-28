@@ -45,7 +45,7 @@ if (is_post()) {
 }
 
 $payment = app()->payments->find($id);
-$token = (string) $payment['access_token'];
+$token = isset($payment['access_token']) ? (string) $payment['access_token'] : '';
 
 render('admin/payment', [
     'pageTitle'  => 'Payment #' . $id,
