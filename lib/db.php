@@ -89,6 +89,26 @@ interface DatabaseInterface
 
 class DatabaseException extends RuntimeException
 {
+    /** @var string SQLSTATE such as 23000 or HY093 ('' when unknown) */
+    public $sqlState = '';
+
+    /** @var int MySQL driver error number (0 when unknown) */
+    public $driverCode = 0;
+
+    /** @var string the statement that failed, for the log */
+    public $statement = '';
+
+    /** @var string what the app was trying to do ("insert into `payments`") */
+    public $operation = '';
+
+    public function __construct($message = '', $code = 0, $previous = null, $sqlState = '', $driverCode = 0, $statement = '', $operation = '')
+    {
+        parent::__construct($message, (int) $code, $previous instanceof Throwable ? $previous : null);
+        $this->sqlState = (string) $sqlState;
+        $this->driverCode = (int) $driverCode;
+        $this->statement = (string) $statement;
+        $this->operation = (string) $operation;
+    }
 }
 
 class Database implements DatabaseInterface
@@ -186,24 +206,16 @@ class Database implements DatabaseInterface
             throw new DatabaseException('Cannot insert an empty row.');
         }
         $columns = array_keys($data);
-        $placeholders = array_map(function ($column) {
-            return ':' . $column;
-        }, $columns);
 
         $sql = sprintf(
             'INSERT INTO `%s` (`%s`) VALUES (%s)',
             $this->identifier($table),
             implode('`, `', array_map([$this, 'identifier'], $columns)),
-            implode(', ', $placeholders)
+            implode(', ', array_fill(0, count($columns), '?'))
         );
 
-        $params = [];
-        foreach ($data as $column => $value) {
-            $params[':' . $column] = $value;
-        }
-
-        $this->query($sql, $params);
-        return (int) $this->pdo->lastInsertId();
+        $this->query($sql, array_values($data));
+        return (int) $this->lastInsertId();
     }
 
     public function update($table, array $data, $where, array $params = [])
@@ -211,19 +223,58 @@ class Database implements DatabaseInterface
         if (empty($data)) {
             return 0;
         }
+
+        // Every placeholder must use the same style: PDO rejects a statement that
+        // mixes named and positional ones with "SQLSTATE[HY093]: Invalid parameter
+        // number". Callers pass `WHERE id = ?`, so the SET list is positional too.
         $sets = [];
-        $bind = [];
-        foreach ($data as $column => $value) {
-            $sets[] = '`' . $this->identifier($column) . '` = :set_' . $column;
-            $bind[':set_' . $column] = $value;
+        foreach (array_keys($data) as $column) {
+            $sets[] = '`' . $this->identifier($column) . '` = ?';
         }
+
+        list($whereSql, $whereValues) = $this->normaliseWhere($where, $params);
+
         $sql = sprintf(
             'UPDATE `%s` SET %s WHERE %s',
             $this->identifier($table),
             implode(', ', $sets),
-            $where
+            $whereSql
         );
-        return $this->exec($sql, $bind + $params);
+
+        return $this->exec($sql, array_merge(array_values($data), $whereValues));
+    }
+
+    /**
+     * Rewrite named placeholders in a WHERE clause as positional ones, in the
+     * order they appear, collecting their values. A plain `id = ?` passes
+     * through untouched.
+     *
+     * @param  string             $where
+     * @param  array<string,mixed> $params
+     * @return array{0:string,1:array<int,mixed>}
+     */
+    private function normaliseWhere($where, array $params)
+    {
+        $where = (string) $where;
+
+        if (!preg_match('/:[A-Za-z_][A-Za-z0-9_]*/', $where)) {
+            return [$where, array_values($params)];
+        }
+
+        $values = [];
+        $sql = preg_replace_callback('/:([A-Za-z_][A-Za-z0-9_]*)/', function ($match) use ($params, &$values) {
+            $name = $match[1];
+            if (array_key_exists(':' . $name, $params)) {
+                $values[] = $params[':' . $name];
+            } elseif (array_key_exists($name, $params)) {
+                $values[] = $params[$name];
+            } else {
+                throw new DatabaseException('Missing value for the `:' . $name . '` placeholder.');
+            }
+            return '?';
+        }, $where);
+
+        return [$sql, $values];
     }
 
     public function lastInsertId()
@@ -264,10 +315,47 @@ class Database implements DatabaseInterface
      */
     private function fail($sql, PDOException $e)
     {
+        $statement = preg_replace('/\s+/', ' ', (string) $sql);
+        $state = '';
+        $driverCode = 0;
+
+        if (is_array($e->errorInfo)) {
+            $state = isset($e->errorInfo[0]) ? (string) $e->errorInfo[0] : '';
+            $driverCode = isset($e->errorInfo[1]) ? (int) $e->errorInfo[1] : 0;
+        }
+        if ($state === '' && preg_match('/SQLSTATE\[([0-9A-Z]{5})\]/', $e->getMessage(), $m)) {
+            $state = $m[1];
+        }
+        if ($driverCode === 0 && preg_match('/SQLSTATE\[[0-9A-Z]{5}\]\s*[^:]*:\s*(\d{3,5})\b/', $e->getMessage(), $m)) {
+            $driverCode = (int) $m[1];
+        }
+
         app_log('error', 'Database error: ' . $e->getMessage(), [
-            'sql'   => preg_replace('/\s+/', ' ', (string) $sql),
-            'code'  => $e->getCode(),
+            'sql'        => $statement,
+            'sqlstate'   => $state,
+            'code'       => $driverCode,
+            'pdo_code'   => $e->getCode(),
         ]);
-        throw new DatabaseException($e->getMessage(), (int) $e->getCode(), $e);
+
+        throw new DatabaseException(
+            $e->getMessage(),
+            (int) $e->getCode(),
+            $e,
+            $state,
+            $driverCode,
+            $statement,
+            self::describe($statement)
+        );
+    }
+
+    /**
+     * Short human description of a statement ("insert into `payments`").
+     */
+    private static function describe($sql)
+    {
+        if (preg_match('/^\s*(INSERT INTO|UPDATE|DELETE FROM|SELECT|ALTER TABLE|CREATE TABLE)\s+`?(\w+)`?/i', (string) $sql, $m)) {
+            return strtolower($m[1]) . ' `' . $m[2] . '`';
+        }
+        return 'query';
     }
 }

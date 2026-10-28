@@ -536,6 +536,11 @@ function app_log($level, $message, array $context = [])
  */
 function database_error_code(Throwable $error)
 {
+    // The DB layer records the driver number itself (see Database::fail()).
+    if ($error instanceof DatabaseException && (int) $error->driverCode > 0) {
+        return (int) $error->driverCode;
+    }
+
     $message = (string) $error->getMessage();
 
     // Everything after the SQLSTATE marker, minus quoted values (a value can
@@ -570,12 +575,34 @@ function database_error_hint(Throwable $error, &$reference = null)
 
     $reference = strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
     app_log('error', 'Database error [' . $reference . '] code ' . $code . ': ' . $message, [
-        'code' => $code,
-        'ref'  => $reference,
+        'code'      => $code,
+        'ref'       => $reference,
+        'sqlstate'  => $error instanceof DatabaseException ? $error->sqlState : '',
+        'operation' => $error instanceof DatabaseException ? $error->operation : '',
+        'sql'       => $error instanceof DatabaseException ? $error->statement : '',
     ]);
 
     if (defined('APP_DEBUG') && APP_DEBUG) {
         return $message . ' (MySQL ' . $code . ', ref ' . $reference . ')';
+    }
+
+    $state = $error instanceof DatabaseException ? strtoupper((string) $error->sqlState) : '';
+    if ($state === '' && preg_match('/SQLSTATE\[([0-9A-Z]{5})\]/i', $message, $sm)) {
+        $state = strtoupper($sm[1]);
+    }
+    $where = $error instanceof DatabaseException && $error->operation !== ''
+        ? ' while it was running ' . $error->operation
+        : '';
+
+    // Malformed statement — the app and the query disagree, not the data.
+    if ($state === 'HY093') {
+        return 'The application sent a database query with mismatched parameters' . $where
+            . ' (SQLSTATE HY093). This is a bug, not something you can fix in the database — '
+            . 'the technical details are in storage/logs. Ref ' . $reference . '.';
+    }
+    if (in_array($state, ['42000', 'HY000'], true) && $code === 0) {
+        return 'MySQL rejected a query' . $where . ' (SQLSTATE ' . $state . '). '
+            . 'The exact statement is in storage/logs under ref ' . $reference . '.';
     }
 
     // "Column 'order_id' cannot be null" — a v1 table kept a NOT NULL constraint.
@@ -628,8 +655,12 @@ function database_error_hint(Throwable $error, &$reference = null)
             . 'Ref ' . $reference . '.';
     }
 
-    return 'The database rejected the request (MySQL error ' . ($code > 0 ? $code : 'unknown') . '). '
-        . 'Open update.php to check the schema; technical details are in storage/logs. Ref ' . $reference . '.';
+    $described = 'MySQL error ' . ($code > 0 ? $code : 'unknown')
+        . ($state !== '' ? ', SQLSTATE ' . $state : '');
+
+    return 'The database rejected the request (' . $described . ')' . $where . '. '
+        . 'Open update.php to check the schema; the full statement is in storage/logs under ref '
+        . $reference . '.';
 }
 
 /**

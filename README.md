@@ -400,9 +400,10 @@ still renders, but admin sign-in is disabled with an explanatory message (by des
 | "Setup required" page | Database not reachable or tables missing → run `install.php`, check `config.local.php` |
 | **"Database update required" page** | The database was created by v1 or an interrupted install. Open `update.php`, press **Run the update**, then delete the file |
 | **Checkout fails: "The server returned an unexpected response"** | The API returned a non-JSON error (usually a database column/table missing). Open `update.php`; details are in `storage/logs`. Run the updater even if you already ran `install.php` |
-| API returns `{"error":…,"code":"database_error"}` | Same cause: schema behind. The message tells you to open `update.php` (permission errors instead point at `config.local.php`) |
+| API returns `{"error":…,"code":"database_error","ref":"ABC123"}` | The message names the cause; `ref` finds the statement in `storage/logs`. Most map to "open `update.php`", permission errors point at `config.local.php` |
 | **`"Column 'x' cannot be null"` / `"Field 'x' doesn't have a default value"`** | Your tables came from v1, where columns were `NOT NULL`. Press **Run the update** in `update.php` — it makes those columns optional without touching data |
-| Still failing after `update.php` | Open `update.php` → **Test the payment write**. It performs the real INSERT, rolls it back and prints the exact MySQL error plus a reference code you can search for in `storage/logs` |
+| Still failing after `update.php` | Open `update.php` → **Test the payment write**. It performs the whole checkout write (INSERT → audit row → order-id UPDATE) in a transaction, rolls it back and prints the exact MySQL error, plus the last log lines to copy |
+| `SQLSTATE HY093` / "MySQL error unknown" | A query mixed `:named` and `?` placeholders — fixed in 2.0.0; make sure every file (especially `lib/db.php`) came from the same package version |
 | Admin sign-in says sessions are unavailable | `session.save_path` not writable → fix PHP config (the app tries the temp dir first) |
 | Pay button disabled / "Payments are not configured" | Razorpay Key ID or Secret empty in *Site settings → Payments* |
 | Razorpay popup does not open | `checkout.razorpay.com` blocked (ad-blocker, CSP, no internet) — check the browser console |
@@ -440,9 +441,10 @@ before Razorpay is called. Without that step every checkout fails with *"Column 
 cannot be null"*. Widening a column to `NULL` keeps all existing rows.
 
 Running the updater twice is harmless — the second run reports *"Everything is up to date"*.
-A **Diagnose checkout** panel on the same page writes one `payments` row inside a transaction,
-rolls it back, and prints the exact MySQL error (with a reference code) if the write fails; the
-last five database errors from `storage/logs` are listed underneath. An **Environment check**
+A **Diagnose checkout** panel on the same page replays the whole checkout write — the pending
+`payments` row, the `payment_events` audit entry and the `UPDATE` that stores the Razorpay order
+id — inside a transaction, then rolls it back. If any step fails it prints the exact MySQL error
+with a reference code, and the latest log lines are shown in a copyable box. An **Environment check**
 lists the PHP/MySQL versions, the PDO driver, the Razorpay HTTPS client and whether `uploads/`
 and `storage/` are writable — the usual reasons a local XAMPP install still misbehaves.
 

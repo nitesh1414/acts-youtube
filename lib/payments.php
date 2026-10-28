@@ -249,10 +249,14 @@ final class Payments
             $params
         );
 
+        // `??` guards against a driver that labels an aggregate differently; a
+        // missing key must never print a PHP warning on top of the admin page.
+        $row = is_array($row) ? $row : [];
+
         return [
-            'success_count' => is_array($row) ? (int) $row['success_count'] : 0,
-            'pending_count' => is_array($row) ? (int) $row['pending_count'] : 0,
-            'revenue'       => is_array($row) ? (float) $row['revenue'] : 0.0,
+            'success_count' => (int) ($row['success_count'] ?? 0),
+            'pending_count' => (int) ($row['pending_count'] ?? 0),
+            'revenue'       => (float) ($row['revenue'] ?? 0),
         ];
     }
 

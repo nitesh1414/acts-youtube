@@ -113,14 +113,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $db !== null) {
             // A real INSERT, rolled back immediately: it proves the payments
             // table accepts exactly what checkout will send.
             $db->transaction(function () use ($db, &$probeId) {
+                // 1. The pending row checkout creates first.
                 $probeId = app()->payments->create([
                     'user_name'   => 'Update check',
                     'user_email'  => 'probe@example.invalid',
                     'user_mobile' => '9000000000',
                     'amount'      => 1,
                     'currency'    => 'INR',
-                    'order_id'    => '__update_probe__',
                 ]);
+
+                // 2. The audit entry written right after it.
+                app()->payments->logEvent((int) $probeId, 'probe.update_check', 'Diagnostic row', ['amount' => 1]);
+
+                // 3. The UPDATE that attaches the Razorpay order id — this is the
+                //    statement that used to fail with "SQLSTATE[HY093]".
+                $db->update('payments', ['order_id' => '__update_probe__', 'updated_at' => now()], 'id = ?', [(int) $probeId]);
+
                 throw new RuntimeException('__rollback__');
             });
             $probe['ok'] = true;
@@ -204,6 +212,7 @@ if ($db !== null) {
 
 // Last few database problems from storage/logs — the detail behind "Ref XXXXXX".
 $recentErrors = [];
+$logTail = '';
 $logFiles = glob(APP_ROOT . '/storage/logs/app-*.log');
 if (is_array($logFiles) && $logFiles !== []) {
     rsort($logFiles);
@@ -230,6 +239,8 @@ if (is_array($logFiles) && $logFiles !== []) {
             }
         }
     }
+    $tail = array_slice($lines, -25);
+    $logTail = implode("\n", $tail);
 }
 
 $environment = [
@@ -346,6 +357,14 @@ update_head('Database update');
                 <p class="muted">Reference <code><?= e($probe['ref']) ?></code> — search for it in
                     <code>storage/logs</code>.</p>
             <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if ($logTail !== ''): ?>
+            <h2>Latest log lines</h2>
+            <p class="muted">Copy this if you need help. Nothing here is secret except your database
+                password, which is never written to the log.</p>
+            <textarea readonly rows="12" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem;"
+                onclick="this.select()"><?= e($logTail) ?></textarea>
         <?php endif; ?>
 
         <?php if ($recentErrors !== []): ?>
