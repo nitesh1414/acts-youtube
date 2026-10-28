@@ -1,0 +1,10 @@
+RewriteEngine On
+
+# Prevent directory listing
+Options -Indexes
+
+# Protect sensitive files
+<filesMatch "\.(env|log|ini)$">
+    Order allow,deny
+    Deny from all
+</filesMatch>

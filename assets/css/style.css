@@ -1,0 +1,11 @@
+/* Option A Design - Core Custom Stylesheet
+   Clean professional blue/white admin theme */
+
+:root {
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
