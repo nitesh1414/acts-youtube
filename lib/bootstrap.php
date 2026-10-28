@@ -64,7 +64,7 @@ set_exception_handler(function ($e) {
     if (APP_DEBUG) {
         $message = get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine();
     } elseif ($e instanceof DatabaseException) {
-        $message = database_error_hint($e);
+        $message = database_error_hint($e, $dbReference);
     }
 
     // API / AJAX callers must always receive JSON, never an HTML error page —
@@ -73,6 +73,7 @@ set_exception_handler(function ($e) {
         json_response([
             'error' => $message,
             'code'  => $e instanceof DatabaseException ? 'database_error' : 'server_error',
+            'ref'   => isset($dbReference) && $dbReference !== null ? $dbReference : null,
         ], 500);
     }
 
@@ -242,9 +243,10 @@ if (!$schemaReady) {
     // HTML page is what used to surface as "unexpected response" in the browser.
     if (wants_json()) {
         json_response([
-            'error' => 'The site database needs an update before payments can work. '
+            'error'   => 'The site database needs an update before payments can work. '
                 . 'Open update.php once, then try again.',
-            'code'  => 'database_error',
+            'code'    => 'database_error',
+            'details' => array_values($missing), // names the tables/columns to fix
         ], 503);
     }
 

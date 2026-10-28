@@ -401,6 +401,8 @@ still renders, but admin sign-in is disabled with an explanatory message (by des
 | **"Database update required" page** | The database was created by v1 or an interrupted install. Open `update.php`, press **Run the update**, then delete the file |
 | **Checkout fails: "The server returned an unexpected response"** | The API returned a non-JSON error (usually a database column/table missing). Open `update.php`; details are in `storage/logs`. Run the updater even if you already ran `install.php` |
 | API returns `{"error":…,"code":"database_error"}` | Same cause: schema behind. The message tells you to open `update.php` (permission errors instead point at `config.local.php`) |
+| **`"Column 'x' cannot be null"` / `"Field 'x' doesn't have a default value"`** | Your tables came from v1, where columns were `NOT NULL`. Press **Run the update** in `update.php` — it makes those columns optional without touching data |
+| Still failing after `update.php` | Open `update.php` → **Test the payment write**. It performs the real INSERT, rolls it back and prints the exact MySQL error plus a reference code you can search for in `storage/logs` |
 | Admin sign-in says sessions are unavailable | `session.save_path` not writable → fix PHP config (the app tries the temp dir first) |
 | Pay button disabled / "Payments are not configured" | Razorpay Key ID or Secret empty in *Site settings → Payments* |
 | Razorpay popup does not open | `checkout.razorpay.com` blocked (ad-blocker, CSP, no internet) — check the browser console |
@@ -432,10 +434,17 @@ Version 2 replaced the `logo` URL column with an uploaded file stored in `logo_p
    * A v1 database has no admin accounts, so the same page then asks you to create the first one.
 3. Delete `update.php` (and `install.php`) once the site works.
 
+Besides adding what is missing, the updater also **relaxes `NOT NULL` constraints that v2
+cannot honour** — v1 required `payments.order_id` up front, while v2 inserts the pending row
+before Razorpay is called. Without that step every checkout fails with *"Column 'order_id'
+cannot be null"*. Widening a column to `NULL` keeps all existing rows.
+
 Running the updater twice is harmless — the second run reports *"Everything is up to date"*.
-An **Environment check** on the same page lists the PHP/MySQL versions, the PDO driver, the
-Razorpay HTTPS client and whether `uploads/` and `storage/` are writable — the usual reasons a
-local XAMPP install still misbehaves after the update.
+A **Diagnose checkout** panel on the same page writes one `payments` row inside a transaction,
+rolls it back, and prints the exact MySQL error (with a reference code) if the write fails; the
+last five database errors from `storage/logs` are listed underneath. An **Environment check**
+lists the PHP/MySQL versions, the PDO driver, the Razorpay HTTPS client and whether `uploads/`
+and `storage/` are writable — the usual reasons a local XAMPP install still misbehaves.
 
 > If the site shows **"Database update required"** instead of a page, that *is* the updater asking
 > to be run. It is shown whenever the database is behind, so a half-finished install or a

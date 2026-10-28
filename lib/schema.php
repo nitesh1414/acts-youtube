@@ -213,24 +213,40 @@ final class Schema
     {
         $missingTables = [];
         $missingColumns = [];
+        $tooStrict = [];
 
         foreach (self::tables() as $table => $definition) {
             try {
-                $columns = self::existingColumns($db, $table);
+                $rows = self::columnRows($db, $table);
             } catch (Throwable $e) {
                 $missingTables[] = 'table `' . $table . '`';
                 continue;
             }
 
+            $columns = array_keys($rows);
             $absent = array_values(array_diff(array_keys($definition['columns']), $columns));
             if ($absent !== []) {
                 $missingColumns[] = 'column(s) `' . $table . '.' . implode('`, `' . $table . '.', $absent) . '`';
             }
+
+            // A column v2 writes as NULL later on must not be NOT NULL without a
+            // default, or the first INSERT fails ("cannot be null").
+            foreach ($definition['columns'] as $name => $sql) {
+                if (stripos((string) $sql, 'NOT NULL') !== false || !isset($rows[$name])) {
+                    continue;
+                }
+                $row = $rows[$name];
+                $extra = isset($row['Extra']) ? strtolower((string) $row['Extra']) : '';
+                if (!self::isStrictColumn($row) || strpos($extra, 'auto_increment') !== false) {
+                    continue;
+                }
+                $tooStrict[] = 'column `' . $table . '.' . $name . '` must allow NULL';
+            }
         }
 
-        // Whole tables are the bigger problem (they hide the columns inside), so
-        // report them first — the boot page only has room for the first few items.
-        $missing = array_merge($missingTables, $missingColumns);
+        // Order matters: the boot page only has room for the first few items, so
+        // report whole tables first, then the constraints that block checkout.
+        $missing = array_merge($missingTables, $tooStrict, $missingColumns);
 
         // A settings row must exist for the app to work.
         try {
@@ -254,7 +270,8 @@ final class Schema
      * @param  DatabaseInterface       $db
      * @param  callable|null           $logger function (string $message): void
      * @return array<string, mixed>    report: tables_created, columns_added,
-     *                                 indexes_added, data_changes, errors, ok
+     *                                 indexes_added, columns_relaxed,
+     *                                 data_changes, errors, ok
      */
     public static function migrate(DatabaseInterface $db, $logger = null)
     {
@@ -269,6 +286,7 @@ final class Schema
             'tables_created' => [],
             'columns_added'  => [],
             'indexes_added'  => [],
+            'columns_relaxed' => [],
             'data_changes'   => [],
             'errors'         => [],
         ];
@@ -324,6 +342,12 @@ final class Schema
                     $report['errors'][] = 'Could not add `' . $table . '.' . $name . '`: ' . $e->getMessage();
                 }
             }
+
+            // A v1 table may declare NOT NULL on a column v2 fills in later
+            // (e.g. `payments.order_id`: v1 inserted the row only after Razorpay
+            // accepted the order, v2 inserts it as pending first). Such a column
+            // makes every checkout fail with "Column ... cannot be null".
+            self::relaxNotNulls($db, $table, $definition, $report, $log);
 
             $indexes = [];
             try {
@@ -423,6 +447,80 @@ final class Schema
     }
 
     /**
+     * True when the column is NOT NULL and has no default, i.e. MySQL rejects an
+     * INSERT that leaves it out.
+     *
+     * @param array<string, mixed> $row a SHOW COLUMNS row
+     */
+    private static function isStrictColumn(array $row)
+    {
+        $null = isset($row['Null']) ? strtoupper((string) $row['Null']) : 'YES';
+        $default = array_key_exists('Default', $row) ? $row['Default'] : null;
+        return $null === 'NO' && $default === null;
+    }
+
+    /**
+     * Allow NULL on columns that cannot hold a value yet.
+     *
+     * Only columns that are NOT NULL *and* have no DEFAULT are touched — those
+     * are the ones that reject an INSERT. Relaxing a constraint keeps every
+     * row intact and never widens a column the app relies on:
+     *
+     *   - columns we declare nullable in `tables()` (order_id, access_token, …)
+     *   - leftover v1 columns we do not know about, as long as they have no
+     *     DEFAULT (nothing sensible could be filled in anyway)
+     *
+     * @param array<string, mixed> $definition
+     * @param array<string, mixed> $report
+     * @param callable             $log
+     */
+    private static function relaxNotNulls(DatabaseInterface $db, $table, array $definition, array &$report, $log)
+    {
+        try {
+            $rows = $db->all('SHOW COLUMNS FROM `' . self::safeName($table) . '`');
+        } catch (Throwable $e) {
+            return; // Cannot inspect — the INSERT/UPDATE errors will explain why.
+        }
+
+        foreach ($rows as $row) {
+            if (!isset($row['Field'])) {
+                continue;
+            }
+            $field = (string) $row['Field'];
+            $extra = isset($row['Extra']) ? strtolower((string) $row['Extra']) : '';
+
+            if (!self::isStrictColumn($row)) {
+                continue; // already nullable, or MySQL fills it for us
+            }
+            if (strpos($extra, 'auto_increment') !== false || strpos($extra, 'on update') !== false) {
+                continue;
+            }
+            if (isset($row['Key']) && strtoupper((string) $row['Key']) === 'PRI') {
+                continue;
+            }
+
+            $ourDefinition = isset($definition['columns'][$field]) ? (string) $definition['columns'][$field] : null;
+            if ($ourDefinition !== null && stripos($ourDefinition, 'NOT NULL') !== false) {
+                continue; // the app always writes a value here
+            }
+
+            $type = isset($row['Type']) && $row['Type'] !== '' ? (string) $row['Type'] : null;
+            if ($type === null) {
+                continue;
+            }
+
+            try {
+                $db->exec('ALTER TABLE `' . self::safeName($table) . '` MODIFY `' . self::safeName($field) . '` ' . $type . ' NULL');
+                $report['columns_relaxed'][] = $table . '.' . $field;
+                $log('Allowed NULL for `' . $table . '.' . $field . '` (it was NOT NULL without a default).');
+            } catch (Throwable $e) {
+                $report['errors'][] = 'Could not allow NULL for `' . $table . '.' . $field . '`: ' . $e->getMessage();
+                $log('FAILED allowing NULL for `' . $table . '.' . $field . '`.');
+            }
+        }
+    }
+
+    /**
      * Turn a column definition into something safe to ADD to a populated table
      * (no AUTO_INCREMENT, no NOT NULL without a default).
      */
@@ -460,14 +558,23 @@ final class Schema
      */
     public static function existingColumns(DatabaseInterface $db, $table)
     {
-        $rows = $db->all('SHOW COLUMNS FROM `' . self::safeName($table) . '`');
-        $columns = [];
-        foreach ($rows as $row) {
+        return array_keys(self::columnRows($db, $table));
+    }
+
+    /**
+     * SHOW COLUMNS rows keyed by field name (Field/Type/Null/Key/Default/Extra).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function columnRows(DatabaseInterface $db, $table)
+    {
+        $rows = [];
+        foreach ($db->all('SHOW COLUMNS FROM `' . self::safeName($table) . '`') as $row) {
             if (isset($row['Field'])) {
-                $columns[] = (string) $row['Field'];
+                $rows[(string) $row['Field']] = $row;
             }
         }
-        return $columns;
+        return $rows;
     }
 
     /**

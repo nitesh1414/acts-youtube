@@ -25,6 +25,11 @@ if (session_status() === PHP_SESSION_NONE) {
  * Configuration + database connection
  * ---------------------------------------------------------------------- */
 // __DIR__, not APP_ROOT: config.php has not been loaded yet at this point.
+// If something already booted the app (another include, or a test), remember its
+// connection before `$db = null` below clears the global — at global scope `$db`
+// and `$GLOBALS['db']` are the same variable.
+$existingDb = isset($GLOBALS['db']) && is_object($GLOBALS['db']) ? $GLOBALS['db'] : null;
+
 $configFile = __DIR__ . '/config.local.php';
 $configError = '';
 
@@ -35,7 +40,7 @@ if (!is_file($configFile)) {
 $db = null;
 if ($configError === '') {
     require_once __DIR__ . '/config.php'; // defines DB_* and boots the app
-    $db = isset($GLOBALS['db']) ? $GLOBALS['db'] : null;
+    $db = isset($GLOBALS['db']) && is_object($GLOBALS['db']) ? $GLOBALS['db'] : $existingDb;
 } else {
     require_once __DIR__ . '/lib/db.php';
     require_once __DIR__ . '/lib/schema.php';
@@ -53,6 +58,7 @@ $report = null;
 $errors = [];
 $adminCreated = false;
 $adminError = '';
+$probe = null; // result of the "test the payment write" action
 $hasSession = session_status() === PHP_SESSION_ACTIVE;
 
 if (empty($_SESSION['update_csrf'])) {
@@ -98,6 +104,47 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && $db !== null) {
             }
         } catch (Throwable $e) {
             $errors[] = 'The update failed: ' . $e->getMessage();
+        }
+    } elseif ($action === 'test_write') {
+        $probe = ['ok' => false, 'message' => '', 'detail' => '', 'ref' => ''];
+        $probeId = null;
+
+        try {
+            // A real INSERT, rolled back immediately: it proves the payments
+            // table accepts exactly what checkout will send.
+            $db->transaction(function () use ($db, &$probeId) {
+                $probeId = app()->payments->create([
+                    'user_name'   => 'Update check',
+                    'user_email'  => 'probe@example.invalid',
+                    'user_mobile' => '9000000000',
+                    'amount'      => 1,
+                    'currency'    => 'INR',
+                    'order_id'    => '__update_probe__',
+                ]);
+                throw new RuntimeException('__rollback__');
+            });
+            $probe['ok'] = true;
+        } catch (Throwable $e) {
+            if ($e->getMessage() === '__rollback__') {
+                $probe['ok'] = true;
+            } else {
+                $probe['message'] = database_error_hint($e, $ref);
+                $probe['ref'] = (string) $ref;
+                $probe['detail'] = $e->getMessage();
+            }
+        }
+
+        // MyISAM (or a failed rollback) leaves the probe row behind — remove it.
+        if ($probeId !== null) {
+            try {
+                $db->exec('DELETE FROM `payments` WHERE `id` = ?', [(int) $probeId]);
+            } catch (Throwable $e) {
+                // Nothing else to do; the row is harmless and clearly labelled.
+            }
+        }
+
+        if ($probe['ok']) {
+            $probe['message'] = 'The payments table accepted a test row (rolled back). Checkout writes will work.';
         }
     } elseif ($action === 'create_admin') {
         if ($adminCount > 0) {
@@ -152,6 +199,36 @@ if ($db !== null) {
         $serverVersion = (string) $db->value('SELECT VERSION()', [], 'unknown');
     } catch (Throwable $e) {
         $serverVersion = 'unknown';
+    }
+}
+
+// Last few database problems from storage/logs — the detail behind "Ref XXXXXX".
+$recentErrors = [];
+$logFiles = glob(APP_ROOT . '/storage/logs/app-*.log');
+if (is_array($logFiles) && $logFiles !== []) {
+    rsort($logFiles);
+    $lines = @file($logFiles[0], FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (is_array($lines)) {
+        foreach (array_slice(array_reverse($lines), 0, 400) as $line) {
+            $entry = json_decode($line, true);
+            if (!is_array($entry)) {
+                continue;
+            }
+            $text = isset($entry['message']) ? (string) $entry['message'] : '';
+            $level = isset($entry['level']) ? (string) $entry['level'] : '';
+            if ($level !== 'error' && $level !== 'critical'
+                && stripos($text, 'database') === false && stripos($text, 'SQLSTATE') === false) {
+                continue;
+            }
+            $recentErrors[] = [
+                'time'    => isset($entry['time']) ? date('d M Y, H:i:s', strtotime((string) $entry['time'])) : '',
+                'level'   => $level,
+                'message' => text_limit($text, 400),
+            ];
+            if (count($recentErrors) >= 5) {
+                break;
+            }
+        }
     }
 }
 
@@ -246,7 +323,39 @@ update_head('Database update');
         <?php else: ?>
             <ul class="checks">
                 <?php foreach ($missing as $item): ?>
-                    <li class="bad">Missing: <?= e($item) ?></li>
+                    <li class="bad">
+                        <?= strpos($item, 'must allow NULL') !== false ? 'Fix:' : 'Missing:' ?> <?= e($item) ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+
+        <h2>Diagnose checkout</h2>
+        <p>If paying still fails, press this button. It writes one row to <code>payments</code> and
+            rolls it back, so you see the exact error instead of a generic message.</p>
+        <form method="post" style="margin:0 0 12px">
+            <input type="hidden" name="_token" value="<?= e($csrfToken) ?>">
+            <input type="hidden" name="action" value="test_write">
+            <button type="submit" class="btn btn--ghost" <?= $hasSession ? '' : 'disabled' ?>>Test the payment write</button>
+        </form>
+
+        <?php if ($probe !== null): ?>
+            <div class="alert <?= $probe['ok'] ? 'ok' : 'err' ?>"><?= e($probe['message']) ?></div>
+            <?php if (!$probe['ok'] && $probe['detail'] !== ''): ?>
+                <div class="alert warn"><strong>MySQL said:</strong> <code><?= e($probe['detail']) ?></code></div>
+                <p class="muted">Reference <code><?= e($probe['ref']) ?></code> — search for it in
+                    <code>storage/logs</code>.</p>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <?php if ($recentErrors !== []): ?>
+            <h2>Recent database errors</h2>
+            <ul class="log">
+                <?php foreach ($recentErrors as $entry): ?>
+                    <li style="list-style:none">
+                        <span class="muted"><?= e($entry['time']) ?></span>
+                        <code><?= e($entry['message']) ?></code>
+                    </li>
                 <?php endforeach; ?>
             </ul>
         <?php endif; ?>
@@ -278,10 +387,14 @@ update_head('Database update');
                 <?php foreach ($report['indexes_added'] as $index): ?>
                     <li>Added index <code><?= e($index) ?></code></li>
                 <?php endforeach; ?>
+                <?php foreach (($report['columns_relaxed'] ?? []) as $relaxed): ?>
+                    <li>Allowed NULL for <code><?= e($relaxed) ?></code> (old table required a value)</li>
+                <?php endforeach; ?>
                 <?php foreach ($report['data_changes'] as $change): ?>
                     <li><?= e($change) ?></li>
                 <?php endforeach; ?>
-                <?php if (!$report['tables_created'] && !$report['columns_added'] && !$report['indexes_added'] && !$report['data_changes']): ?>
+                <?php if (!$report['tables_created'] && !$report['columns_added'] && !$report['indexes_added']
+                        && empty($report['columns_relaxed']) && !$report['data_changes']): ?>
                     <li>Nothing to change — schema was already current.</li>
                 <?php endif; ?>
             </ul>

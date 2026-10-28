@@ -65,7 +65,7 @@ try {
         'error' => $e->getMessage(),
         'missing' => Schema::missing(app()->db),
     ]);
-    json_response(['error' => database_error_hint($e), 'code' => 'database_error'], 500);
+    json_response(['error' => database_error_hint($e, $ref), 'code' => 'database_error', 'ref' => $ref], 500);
 } catch (Throwable $e) {
     app_log('error', 'Could not create payment record: ' . $e->getMessage());
     json_response(['error' => 'We could not start your payment. Please try again.'], 500);
@@ -82,7 +82,7 @@ if ($demoMode) {
         app()->db->update('payments', ['order_id' => $orderId, 'updated_at' => now()], 'id = ?', [$paymentId]);
     } catch (DatabaseException $e) {
         app_log('error', 'Could not attach the demo order id: ' . $e->getMessage());
-        json_response(['error' => database_error_hint($e), 'code' => 'database_error'], 500);
+        json_response(['error' => database_error_hint($e, $ref), 'code' => 'database_error', 'ref' => $ref], 500);
     }
 
     json_response([
@@ -113,7 +113,7 @@ try {
     app()->db->update('payments', ['order_id' => $order['id'], 'updated_at' => now()], 'id = ?', [$paymentId]);
 } catch (DatabaseException $e) {
     app_log('error', 'Could not store the Razorpay order id: ' . $e->getMessage());
-    json_response(['error' => database_error_hint($e), 'code' => 'database_error'], 500);
+    json_response(['error' => database_error_hint($e, $ref), 'code' => 'database_error', 'ref' => $ref], 500);
 }
 app()->payments->logEvent($paymentId, 'order.created.razorpay', 'Razorpay order ' . $order['id']);
 

@@ -529,26 +529,107 @@ function app_log($level, $message, array $context = [])
 }
 
 /**
- * Turn a database error into something a site owner can act on.
+ * MySQL driver error number from a PDO message
+ * ("SQLSTATE[23000]: Integrity constraint violation: 1048 Column 'x' cannot be null").
+ *
+ * @return int 0 when the message has no number
  */
-function database_error_hint(Throwable $error)
+function database_error_code(Throwable $error)
 {
     $message = (string) $error->getMessage();
 
-    if (preg_match('/Unknown column|doesn\'t exist|no such (table|column)|Table .* doesn\'t exist/i', $message)) {
-        return 'The database schema is out of date. Open update.php in your browser to add the missing '
-            . 'tables and columns (your data is kept).';
+    // Everything after the SQLSTATE marker, minus quoted values (a value can
+    // itself look like a code: "Duplicate entry '1048' for key ...").
+    $tail = $message;
+    if (preg_match('/SQLSTATE\[[0-9A-Z]{5}\](.*)$/s', $message, $m)) {
+        $tail = $m[1];
     }
-    if (preg_match('/Access denied|Connection refused|Unknown database|SQLSTATE\[HY000\]\s*\[104/i', $message)) {
-        return 'The database could not be reached. Check the credentials in config.local.php.';
+    $tail = preg_replace("/'[^']*'/", "''", $tail);
+    $tail = preg_replace('/`[^`]*`/', '``', (string) $tail);
+
+    if (preg_match('/\[(\d{4,5})\]/', $tail, $m)) {   // [1045] Access denied …
+        return (int) $m[1];
     }
-    if (preg_match('/Duplicate entry/i', $message)) {
-        return 'A duplicate record was detected. Please try again.';
+    if (preg_match('/\b(\d{4,5})\b/', (string) $tail, $m)) {
+        return (int) $m[1];
     }
+    return 0;
+}
+
+/**
+ * Turn a database error into something a site owner can act on, and log the real
+ * message under a short reference so it can be quoted in a support request.
+ *
+ * @param  Throwable    $error
+ * @param  string|null  $reference receives the reference code
+ */
+function database_error_hint(Throwable $error, &$reference = null)
+{
+    $message = (string) $error->getMessage();
+    $code = database_error_code($error);
+
+    $reference = strtoupper(substr(bin2hex(random_bytes(4)), 0, 6));
+    app_log('error', 'Database error [' . $reference . '] code ' . $code . ': ' . $message, [
+        'code' => $code,
+        'ref'  => $reference,
+    ]);
+
     if (defined('APP_DEBUG') && APP_DEBUG) {
-        return $message;
+        return $message . ' (MySQL ' . $code . ', ref ' . $reference . ')';
     }
-    return 'A database error occurred. Please try again in a moment.';
+
+    // "Column 'order_id' cannot be null" — a v1 table kept a NOT NULL constraint.
+    $nullColumn = preg_match("/Column '([^']+)' cannot be null/i", $message, $m) ? $m[1] : null;
+    if ($code === 1048 || $nullColumn !== null) {
+        $column = $nullColumn !== null ? '`' . $nullColumn . '`' : 'a column';
+        return 'The database still requires a value for ' . $column . ' that this version fills in later. '
+            . 'Open update.php once to relax the old constraint (no data is lost), then try again. '
+            . 'Ref ' . $reference . '.';
+    }
+    $requiredColumn = preg_match("/Field '([^']+)' doesn't have a default value/i", $message, $m) ? $m[1] : null;
+    if ($code === 1364 || $requiredColumn !== null) {
+        $column = $requiredColumn !== null ? '`' . $requiredColumn . '`' : 'a column';
+        return 'Your database has a required column ' . $column . ' this version does not use. '
+            . 'Open update.php once — it makes such leftover columns optional. Ref ' . $reference . '.';
+    }
+    if (in_array($code, [1406, 1265, 1366, 1292], true) || preg_match('/Data too long|Incorrect .*value/i', $message)) {
+        return 'A value was too long or in the wrong format for the database (MySQL ' . $code . '). '
+            . 'Details are in storage/logs. Ref ' . $reference . '.';
+    }
+    if ($code === 1054 || preg_match('/Unknown column/i', $message)) {
+        return 'The database schema is out of date (missing column). Open update.php to add it — '
+            . 'your data is kept. Ref ' . $reference . '.';
+    }
+    if ($code === 1146 || preg_match('/Table .* doesn\'t exist/i', $message)) {
+        return 'The database schema is out of date (missing table). Open update.php to create it — '
+            . 'your data is kept. Ref ' . $reference . '.';
+    }
+    if ($code === 1062 || preg_match('/Duplicate entry/i', $message)) {
+        return 'A duplicate record was detected. Please try again. Ref ' . $reference . '.';
+    }
+    if (in_array($code, [1044, 1045, 1142, 1227, 1698], true) || preg_match('/Access denied/i', $message)) {
+        return 'The database refused the connection (access denied). Check DB_USER/DB_PASS in '
+            . 'config.local.php. Ref ' . $reference . '.';
+    }
+    if (in_array($code, [1049], true) || preg_match('/Unknown database/i', $message)) {
+        return 'The database named in config.local.php does not exist. Run install.php to create it. '
+            . 'Ref ' . $reference . '.';
+    }
+    if (in_array($code, [2002, 2003, 2005, 2006, 2013, 2054], true) || preg_match('/Connection refused|server has gone away|No such host/i', $message)) {
+        return 'The database server could not be reached. Start MySQL and check DB_HOST/DB_PORT in '
+            . 'config.local.php. Ref ' . $reference . '.';
+    }
+    if (in_array($code, [1215, 1216, 1217, 1451, 1452], true)) {
+        return 'A database relationship blocked the write. Open update.php and run the update. '
+            . 'Ref ' . $reference . '.';
+    }
+    if ($code === 1290 || preg_match('/read.?only/i', $message)) {
+        return 'The database is in read-only mode (often a full disk). Free some space on the server. '
+            . 'Ref ' . $reference . '.';
+    }
+
+    return 'The database rejected the request (MySQL error ' . ($code > 0 ? $code : 'unknown') . '). '
+        . 'Open update.php to check the schema; technical details are in storage/logs. Ref ' . $reference . '.';
 }
 
 /**
