@@ -38,7 +38,7 @@ $logo = app() ? app()->settings->logoUrl() : '';
             <nav class="site-nav" aria-label="Main navigation">
                 <a href="<?= e(url('')) ?>">Home</a>
                 <?php if (current_access_payment()): ?>
-                    <a href="<?= e(url('success.php')) ?>">My video</a>
+                    <a href="<?= e(url('success.php')) ?>">My library</a>
                 <?php else: ?>
                     <a href="<?= e(url('restore.php')) ?>">Restore access</a>
                 <?php endif; ?>

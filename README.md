@@ -17,7 +17,7 @@ no build step, no Node.js required.
 4. [The admin panel](#4-the-admin-panel)
 5. [Uploading the logo (replaces the old "Logo URL" field)](#5-uploading-the-logo-replaces-the-old-logo-url-field)
 6. [Razorpay setup + webhooks](#6-razorpay-setup--webhooks)
-7. [How the money + access flow works](#7-how-the-money--access-flow-works)
+7. [How the money + access flow works](#7-how-the-money--access-flow-works) *(incl. videos, bundles, lifetime access)*
 8. [Security model](#8-security-model)
 9. [File structure](#9-file-structure)
 10. [Database schema](#10-database-schema)
@@ -34,10 +34,14 @@ no build step, no Node.js required.
 
 **Public site**
 
-- Conversion-focused landing page: price, benefits, locked video preview, FAQ, "how it works".
+- Conversion-focused storefront: hero, **video library with a price per video**,
+  **named bundles** sold for one payment, FAQ and "how it works".
+- One checkout card for whichever video or bundle the visitor picked
+  (`?buy=video:3` / `?buy=bundle:1` — shareable, works without JavaScript).
 - Checkout form (name, e-mail, mobile) with inline validation and a Razorpay popup.
-- Private video page that only opens after a verified payment (embedded via
-  `youtube-nocookie.com`, autoplay, subscribe CTA, receipt with payment IDs).
+- **Private library** after payment: every video the purchase unlocked, with an in-page
+  player and a receipt (`success.php?t=…&v=3`). Opening it again later just works —
+  access never expires unless you set an access window.
 - **Access restore**: buyers who clear cookies or switch devices recover their link with
   the e-mail + mobile number used at checkout (rate limited).
 - **Demo mode**: test the complete payment flow with no Razorpay account and no money.
@@ -46,13 +50,22 @@ no build step, no Node.js required.
 **Admin panel** (`/admin/`)
 
 - Dashboard: revenue KPIs (today / 7 days / 30 days / all time), payment counts,
-  conversion rate, active access passes, 14-day revenue chart, recent payments.
-- Payments: search (name, e-mail, mobile, order id, payment id), status + date filters,
-  sortable columns, pagination, CSV export, per-payment detail view with audit timeline.
+  conversion rate, active access passes, 14-day revenue chart, recent payments,
+  library status (videos/bundles on sale).
+- **Videos**: add a video by pasting any YouTube link, set its own price, order and
+  visibility; sales count per video; deleting a video that was already sold *hides* it
+  instead of erasing a customer's access.
+- **Bundles**: name a set of videos and sell it for one price, with automatic savings
+  calculation and a warning if the bundle would cost more than buying separately.
+- Payments: search (name, e-mail, mobile, order id, payment id, **product**), status +
+  date filters, sortable columns, pagination, CSV export (includes product + lifetime
+  access), per-payment detail view with audit timeline and the **videos that purchase
+  unlocked**.
 - **Logo uploader** (drag & drop, validated) — replaces the old "Logo URL" text field.
-- Site settings: branding (logo, logo text, site name, tagline, accent colour), price,
-  access duration, Razorpay keys, webhook secret + copyable webhook URL, YouTube video
-  and channel links, support e-mail/phone, demo mode toggle.
+- Site settings: branding (logo, logo text, site name, tagline, accent colour), Razorpay
+  keys, webhook secret + copyable webhook URL, access duration (**0 = forever**), YouTube
+  channel link, support e-mail/phone, demo mode toggle. The old single-video field is kept
+  as a clearly-labelled *fallback* used only while the library is empty.
 - Admin users: multiple accounts, bcrypt hashes, add / enable / disable / delete,
   change-own-password. Throttled login with session fingerprinting and idle timeout.
 
@@ -112,8 +125,12 @@ no build step, no Node.js required.
 |---|---|---|
 | Sign in | `/admin/login.php` | Throttled login (5 tries / 10 min per user+IP, 25 per IP) |
 | Dashboard | `/admin/index.php` | KPIs, revenue chart, store status, recent payments |
-| Payments | `/admin/payments.php` | Search, filters, sorting, pagination, CSV export |
-| Payment detail | `/admin/payment.php?id=…` | Full record, audit timeline, regenerate access link |
+| Videos | `/admin/videos.php` | Video library: add/edit/hide/delete, price per video, sales count |
+| New / edit video | `/admin/video.php` | YouTube link, title, description, price, order, visibility |
+| Bundles | `/admin/bundles.php` | Named bundles sold for one payment, savings preview |
+| New / edit bundle | `/admin/bundle.php` | Bundle name, price, description, videos in the bundle |
+| Payments | `/admin/payments.php` | Search, filters, sorting, pagination, CSV export, product column |
+| Payment detail | `/admin/payment.php?id=…` | Full record, product, unlocked videos, audit timeline, regenerate access link |
 | Site settings | `/admin/settings.php` | Branding (logo upload), payments, video, access, support |
 | Admin users | `/admin/admins.php` | Add / enable / disable / delete admin accounts |
 | Change password | `/admin/password.php` | Update your own password |
@@ -199,9 +216,20 @@ Visitor                App                                  Razorpay
    │                    │  + HttpOnly cookie for the device    │
 ```
 
-- Amounts and the video link live only on the server; the browser never decides the price.
-- `success.php` refuses to render the video without a **valid, unexpired, successful** payment
+- The browser sends only `item_type` (`video`/`bundle`) and `item_id`; **the price is re-read
+  from the database** in `api/create_order.php`, so a tampered form cannot buy a ₹999 bundle
+  for ₹1.
+- What a purchase unlocks is snapshotted into `payment_videos` at payment time: editing or
+  deleting a bundle later never changes an existing customer's library.
+- `success.php` refuses to render anything without a **valid, unexpired, successful** payment
   token — the page itself is not enough (this is the biggest difference from v1).
+
+### Lifetime access (v3 default)
+
+`settings.access_days = 0` (the default) means **no expiry**: `payments.access_expires_at`
+is `NULL`, the access token keeps working, and the buyer's library is available any time.
+Set a positive number in *Site settings → Access* to sell time-limited access instead;
+existing lifetime purchases are never shortened by changing the setting.
 - Buyers can recover access at `/restore.php` with the same e-mail + mobile (6 tries / 15 min).
 - Every step is written to `payment_events` and shown in the admin timeline.
 
@@ -239,8 +267,8 @@ Visitor                App                                  Razorpay
 ## 9. File structure
 
 ```
-├── index.php                 Landing page (price + checkout form)
-├── success.php               Private video page (token protected)
+├── index.php                 Storefront (library + bundles + checkout)
+├── success.php               Private library (token protected, ?v= switches video)
 ├── restore.php               Access recovery (e-mail + mobile)
 ├── demo_pay.php              Simulated checkout (demo mode only)
 ├── manifest.php              Dynamic PWA manifest (uses the uploaded logo)
@@ -263,6 +291,7 @@ Visitor                App                                  Razorpay
 │   ├── settings.php          Settings model + validation + save (logo included)
 │   ├── uploads.php           ImageUploader (MIME sniffing, safe storage)
 │   ├── payments.php          Payment repository, filters, stats, audit events
+│   ├── catalog.php           Videos, bundles and what each payment unlocked
 │   ├── razorpay.php          Razorpay Orders/Payments client + signature helpers
 │   ├── youtube.php           Video id / embed / thumbnail helpers
 │   ├── access.php            Buyer access tokens + cookie
@@ -272,9 +301,11 @@ Visitor                App                                  Razorpay
 │
 ├── templates/
 │   ├── site/                 layout, home, success, locked, restore, demo-checkout, error
-│   └── admin/                layout, login, dashboard, payments, payment, settings, admins, password
+│   └── admin/                layout, login, dashboard, videos, video, bundles, bundle,
+│                             payments, payment, settings, admins, password
 │
-├── admin/                    index · payments · payment · settings · admins · password · export · login · logout
+├── admin/                    index · videos · video · bundles · bundle · payments · payment ·
+│                             settings · admins · password · export · login · logout
 ├── api/                      create_order · verify_payment · webhook
 ├── assets/
 │   ├── css/app.css           Design system (site + admin, light/dark, responsive, print)
@@ -294,14 +325,18 @@ Visitor                App                                  Razorpay
 
 | Table | Purpose |
 |---|---|
-| `settings` | Single row (`id = 1`): branding, price, access days, Razorpay keys, video link, demo mode |
+| `settings` | Single row (`id = 1`): branding, Razorpay keys, access days (`0` = lifetime), fallback video link, demo mode |
 | `admin_users` | Admin accounts (`password_hash`, `is_active`, last login metadata) |
-| `payments` | One row per checkout: customer, amount, status, Razorpay ids, access token + expiry, IP/UA |
+| `payments` | One row per checkout: customer, amount, status, Razorpay ids, access token + expiry (`NULL` = lifetime), product snapshot (`product_type`/`product_id`/`product_name`), IP/UA |
+| `videos` | The library: title, description, YouTube URL, **own price**, position, visibility |
+| `bundles` | Named group of videos sold for one price (name is shown to buyers) |
+| `bundle_items` | Which videos belong to which bundle (unique per pair) |
+| `payment_videos` | Snapshot of what a payment unlocked (unique per payment+video) |
 | `payment_events` | Audit trail (order created, payment captured, webhook, access granted/regenerated) |
 | `rate_events` | Rate-limit buckets (admin login, checkout, access restore); pruned automatically |
 
-Statuses: `pending` → `success` | `failed`. Access is granted only for `success` rows with a
-future `access_expires_at`.
+Statuses: `pending` → `success` | `failed`. Access is granted only for `success` rows that
+carry an access token, where `access_expires_at` is either `NULL` (lifetime) or in the future.
 
 The schema is defined **once**, in `lib/schema.php`. The app compares the live database against
 that definition on every boot (cached in `storage/schema-*.ok`), and `update.php` brings an older
@@ -503,24 +538,41 @@ admin with `update.php` (or let `install.php` add one). Old rows have no access 
 
 Because payments touch money, verify these after any change:
 
-1. **Landing** — price, logo, video preview, mobile layout (375 px), demo-mode banner.
+1. **Storefront** — logo, one card per video with its own price, bundle cards with the
+   bundle name and savings, mobile layout (375 px), demo-mode banner.
 2. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
-3. **Payment (test keys)** — successful payment → redirect to the video page → video plays.
-4. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
-5. **Locked page** — open `/success.php` in a private window → "This video is locked".
-6. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
+3. **Product switch** — click *Buy video* on two different cards → the pay card and
+   `?buy=` URL update; reload the URL → the same product is preselected.
+4. **Payment (test keys)** — successful payment → redirect to the library → the bought
+   video plays; a bundle shows every video in it.
+5. **Price tampering** — change `data-amount-paise`/the hidden `item_id` in DevTools → the
+   order is still created for the database price of the re-read product (check Razorpay
+   dashboard / `payments.amount`).
+6. **Other videos stay locked** — a buyer of video 1 cannot open video 2 (their library
+   lists only what they paid for).
+7. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
+8. **Locked page** — open `/success.php` in a private window → the library is locked.
+9. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
    access restored; wrong mobile → generic error; 7 attempts → rate-limit message.
-7. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
-8. **Filters** — search by partial e-mail, filter by status and date range, sort each column,
-   paginate, export CSV and open it in Excel.
-9. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
+10. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
+    the admin payment page says "Lifetime access", and the CSV shows `Lifetime`.
+11. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
+12. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
+    library of whoever bought it), delete a sold video → it is hidden, not erased.
+13. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
+    savings message), save, buy it, then remove a video from the bundle → the earlier buyer
+    still sees it.
+14. **Filters** — search by partial e-mail and by **product name**, filter by status and date
+    range, sort each column, paginate, export CSV and open it in Excel.
+15. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
    `.php` renamed to `.png` is rejected; 3 MB file is rejected; remove checkbox restores the mark.
-10. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
-11. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
-12. **Upgrade path** — restore a v1 dump into a test database, load the site → "Database update
+16. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
+17. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
+18. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
     required", open `update.php` → items listed → Run the update → old payment still visible in
-    *Admin → Payments*, old logo still shown → checkout completes. Run `update.php` again →
-    "Everything is up to date".
+    *Admin → Payments*, old logo still shown, the old YouTube link became a priced video in
+    *Admin → Videos*, old successful payments list that video under **Unlocked videos** →
+    checkout completes. Run `update.php` again → "Everything is up to date".
 
 ---
 

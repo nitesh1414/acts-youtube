@@ -174,6 +174,35 @@
         youtubeInput.addEventListener('blur', refreshYoutubePreview);
     }
 
+    /* Bundle: running total of the selected videos ------------------------- */
+    const picker = document.querySelector('.picker');
+    const bundleTotal = document.getElementById('bundle-single-total');
+
+    if (picker && bundleTotal) {
+        const prices = JSON.parse(picker.getAttribute('data-prices') || '{}');
+        const currency = bundleTotal.getAttribute('data-currency') || 'INR';
+        const format = paise => {
+            try {
+                return new Intl.NumberFormat('en-IN', {
+                    style: 'currency', currency: currency, maximumFractionDigits: 0
+                }).format(paise / 100);
+            } catch (e) {
+                return (paise / 100).toFixed(0) + ' ' + currency;
+            }
+        };
+        const refreshTotal = () => {
+            let total = 0;
+            picker.querySelectorAll('input[type=checkbox]:checked').forEach(box => {
+                total += Number(prices[box.value] || 0);
+            });
+            bundleTotal.textContent = total > 0
+                ? format(total) + ' across ' + picker.querySelectorAll('input[type=checkbox]:checked').length + ' video(s)'
+                : 'nothing selected yet';
+        };
+        picker.addEventListener('change', refreshTotal);
+        refreshTotal();
+    }
+
     /* Colour picker live label --------------------------------------------- */
     const colourInput = document.getElementById('theme_color');
     if (colourInput) {

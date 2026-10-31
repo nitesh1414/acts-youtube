@@ -20,6 +20,9 @@ final class App
     /** @var Payments */
     public $payments;
 
+    /** @var Catalog */
+    public $catalog;
+
     /** @var RazorpayClient|null */
     private $razorpay = null;
 
@@ -33,6 +36,7 @@ final class App
         $this->throttle = new Throttle($db);
         $this->auth = new Auth($db, $this->throttle);
         $this->payments = new Payments($db);
+        $this->catalog = new Catalog($db);
     }
 
     /**

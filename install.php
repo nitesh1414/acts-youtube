@@ -34,7 +34,7 @@ $defaults = [
     'site_url'   => '',
     'site_name'  => 'PayAccess',
     'amount'     => '199',
-    'access_days'=> '30',
+    'access_days'=> '0',
     'demo_mode'  => '0',
     'username'   => 'admin',
     'admin_name' => 'Administrator',
@@ -154,7 +154,7 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_numeric($values['amount']) || (float) $values['amount'] < 1) {
         $errors[] = 'Enter a valid price.';
     }
-    if (!ctype_digit($values['access_days']) || (int) $values['access_days'] < 1 || (int) $values['access_days'] > 3650) {
+    if (!ctype_digit($values['access_days']) || (int) $values['access_days'] > 3650) {
         $errors[] = 'Access days must be a number between 1 and 3650.';
     }
     if (!preg_match('/^[a-z0-9][a-z0-9_.-]{2,31}$/', strtolower($values['username']))) {
@@ -239,6 +239,42 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $values['demo_mode'] === '1' ? 1 : 0,
             ]);
 
+            // --- Demo library (videos + one bundle) -------------------------
+            $demoVideoIds = [];
+            $demoBundleId = 0;
+            if ($seedDemo) {
+                $demoVideos = [
+                    ['Episode 1 — Getting started', 'The first video of the demo library. Replace it with your own unlisted link.', 'aqz-KE-bpKQ', number_format((float) $values['amount'], 2, '.', '')],
+                    ['Episode 2 — Going further', 'A second priced video, so you can try buying one video or the bundle.', 'aqz-KE-bpKQ', number_format((float) $values['amount'] + 100, 2, '.', '')],
+                ];
+                $insertVideo = $pdo->prepare(
+                    'INSERT INTO videos (title, description, youtube_url, price, position, is_active, created_at, updated_at)
+                     VALUES (?, ?, ?, ?, ?, 1, NOW(), NOW())'
+                );
+                $position = 0;
+                foreach ($demoVideos as $video) {
+                    $position++;
+                    $insertVideo->execute([$video[0], $video[1], 'https://www.youtube.com/watch?v=' . $video[2], $video[3], $position]);
+                    $demoVideoIds[] = (int) $pdo->lastInsertId();
+                }
+
+                if (count($demoVideoIds) === 2) {
+                    $bundlePrice = number_format(max(1, ((float) $values['amount'] * 2) - 50), 2, '.', '');
+                    $pdo->prepare(
+                        'INSERT INTO bundles (name, description, price, position, is_active, created_at, updated_at)
+                         VALUES (?, ?, ?, 1, 1, NOW(), NOW())'
+                    )->execute(['Demo bundle — both episodes', 'Both demo videos for one discounted payment.', $bundlePrice]);
+                    $demoBundleId = (int) $pdo->lastInsertId();
+
+                    $link = $pdo->prepare('INSERT INTO bundle_items (bundle_id, video_id, position, created_at) VALUES (?, ?, ?, NOW())');
+                    $linkPosition = 0;
+                    foreach ($demoVideoIds as $videoId) {
+                        $linkPosition++;
+                        $link->execute([$demoBundleId, $videoId, $linkPosition]);
+                    }
+                }
+            }
+
             // --- Optional demo payments -------------------------------------
             if ($seedDemo) {
                 $demoRows = [
@@ -250,16 +286,41 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $insertPayment = $pdo->prepare(
                     "INSERT INTO payments
                         (user_name, user_email, user_mobile, amount, currency, status, order_id, payment_id, method,
-                         access_token, access_expires_at, ip_address, created_at, paid_at, updated_at)
-                     VALUES (?, ?, ?, ?, 'INR', ?, ?, ?, ?, ?, ?, '127.0.0.1', ?, ?, ?)"
+                         access_token, access_expires_at, ip_address, created_at, paid_at, updated_at,
+                         product_type, product_id, product_name)
+                     VALUES (?, ?, ?, ?, 'INR', ?, ?, ?, ?, ?, ?, '127.0.0.1', ?, ?, ?, ?, ?, ?)"
+                );
+                $insertEntitlement = $pdo->prepare(
+                    'INSERT INTO payment_videos (payment_id, video_id, created_at) VALUES (?, ?, NOW())'
                 );
                 foreach ($demoRows as $index => $row) {
                     list($name, $email, $mobile, $status, $daysAgo, $razorpayId) = $row;
                     $created = date('Y-m-d H:i:s', strtotime('-' . $daysAgo . ' days'));
                     $paid = $status === 'success' ? date('Y-m-d H:i:s', strtotime('-' . $daysAgo . ' days +2 minutes')) : null;
                     $token = $status === 'success' ? random_token(32) : null;
-                    $expires = $status === 'success' ? date('Y-m-d H:i:s', strtotime('-' . $daysAgo . ' days +' . (int) $values['access_days'] . ' days')) : null;
+                    $expires = $status === 'success' && (int) $values['access_days'] > 0
+                            ? date('Y-m-d H:i:s', strtotime('-' . $daysAgo . ' days +' . (int) $values['access_days'] . ' days'))
+                            : null;
                     $orderId = 'order_demo_' . ($index + 1) . bin2hex(random_bytes(4));
+
+                    // First success buys the bundle, the second one single video.
+                    $productType = null;
+                    $productId = null;
+                    $productName = null;
+                    $unlock = [];
+                    if ($status === 'success') {
+                        if ($index === 0 && $demoBundleId > 0) {
+                            $productType = 'bundle';
+                            $productId = $demoBundleId;
+                            $productName = 'Demo bundle — both episodes';
+                            $unlock = $demoVideoIds;
+                        } elseif ($demoVideoIds !== []) {
+                            $productType = 'video';
+                            $productId = $demoVideoIds[0];
+                            $productName = $demoVideos[0][0];
+                            $unlock = [$demoVideoIds[0]];
+                        }
+                    }
 
                     $insertPayment->execute([
                         $name,
@@ -275,7 +336,17 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         $created,
                         $paid,
                         $created,
+                        $productType,
+                        $productId,
+                        $productName,
                     ]);
+
+                    if ($unlock !== []) {
+                        $demoPaymentId = (int) $pdo->lastInsertId();
+                        foreach ($unlock as $videoId) {
+                            $insertEntitlement->execute([$demoPaymentId, $videoId]);
+                        }
+                    }
                 }
             }
 
@@ -422,8 +493,9 @@ if ($installed) {
     echo '<h2>Next steps</h2><ol style="color:#a9b8ce;font-size:.9rem;padding-left:20px">'
         . '<li>Open the admin panel and go to <strong>Site settings → Payments</strong> to add your Razorpay keys.</li>'
         . '<li>Upload your logo under <strong>Branding</strong>.</li>'
-        . '<li>Add your unlisted YouTube video URL under <strong>Video content</strong>.</li>'
-        . '<li>Place a test payment (Demo mode is available) and confirm the video page unlocks.</li>'
+        . '<li><strong>Add your videos</strong> under <strong>Videos</strong> — paste an unlisted YouTube link and give each one its own price.</li>'
+        . '<li>Optional: group videos into a named <strong>Bundle</strong> sold for one payment.</li>'
+        . '<li>Place a test payment (Demo mode is available) and confirm the videos unlock in the buyer\'s library.</li>'
         . '</ol>';
 
     echo '<div class="actions"><a class="primary" href="admin/login.php">Sign in to the admin panel</a>'
@@ -514,8 +586,8 @@ installer_head('Install PayAccess');
                         <input id="amount" name="amount" type="number" min="1" step="0.01" value="<?= e($values['amount']) ?>" required>
                     </div>
                     <div>
-                        <label for="access_days">Access days</label>
-                        <input id="access_days" name="access_days" type="number" min="1" max="3650" value="<?= e($values['access_days']) ?>" required>
+                        <label for="access_days">Access days <span class="tiny muted">(0 = forever)</span></label>
+                        <input id="access_days" name="access_days" type="number" min="0" max="3650" value="<?= e($values['access_days']) ?>" required>
                     </div>
                     <div>
                         <label for="demo_mode">Demo mode</label>

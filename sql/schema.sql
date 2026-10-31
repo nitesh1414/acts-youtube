@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS `settings` (
     `youtube_channel_url` VARCHAR(255) DEFAULT NULL,
     `support_email` VARCHAR(190) DEFAULT NULL,
     `support_phone` VARCHAR(30) DEFAULT NULL,
-    `access_days` SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    `access_days` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `demo_mode` TINYINT(1) NOT NULL DEFAULT 0,
     `theme_color` CHAR(7) NOT NULL DEFAULT '#4f46e5',
     `updated_at` DATETIME DEFAULT NULL,
@@ -62,6 +62,9 @@ CREATE TABLE IF NOT EXISTS `payments` (
     `ip_address` VARCHAR(45) DEFAULT NULL,
     `user_agent` VARCHAR(255) DEFAULT NULL,
     `notes` VARCHAR(255) DEFAULT NULL,
+    `product_type` VARCHAR(10) DEFAULT NULL,
+    `product_id` INT UNSIGNED DEFAULT NULL,
+    `product_name` VARCHAR(160) DEFAULT NULL,
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `paid_at` DATETIME DEFAULT NULL,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -72,7 +75,8 @@ CREATE TABLE IF NOT EXISTS `payments` (
     KEY `idx_payments_status_date` (`status`, `created_at`),
     KEY `idx_payments_email` (`user_email`),
     KEY `idx_payments_mobile` (`user_mobile`),
-    KEY `idx_payments_access_end` (`access_expires_at`)
+    KEY `idx_payments_access_end` (`access_expires_at`),
+    KEY `idx_payments_product` (`product_type`, `product_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `payment_events` (
@@ -84,6 +88,54 @@ CREATE TABLE IF NOT EXISTS `payment_events` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
     KEY `idx_events_payment` (`payment_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `videos` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `title` VARCHAR(160) NOT NULL,
+    `description` TEXT DEFAULT NULL,
+    `youtube_url` VARCHAR(255) NOT NULL,
+    `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `position` INT NOT NULL DEFAULT 0,
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_videos_active` (`is_active`, `position`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `bundles` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `name` VARCHAR(160) NOT NULL,
+    `description` TEXT DEFAULT NULL,
+    `price` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    `position` INT NOT NULL DEFAULT 0,
+    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    KEY `idx_bundles_active` (`is_active`, `position`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `bundle_items` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `bundle_id` INT UNSIGNED NOT NULL,
+    `video_id` INT UNSIGNED NOT NULL,
+    `position` INT NOT NULL DEFAULT 0,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_bundle_video` (`bundle_id`, `video_id`),
+    KEY `idx_bundle_items_video` (`video_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `payment_videos` (
+    `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `payment_id` INT UNSIGNED NOT NULL,
+    `video_id` INT UNSIGNED NOT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_payment_video` (`payment_id`, `video_id`),
+    KEY `idx_payment_videos_video` (`video_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `rate_events` (
@@ -98,4 +150,4 @@ CREATE TABLE IF NOT EXISTS `rate_events` (
 -- Default settings row (ignored when it already exists).
 INSERT IGNORE INTO `settings`
     (`id`, `site_name`, `logo_text`, `tagline`, `amount`, `currency`, `access_days`, `theme_color`, `updated_at`)
-VALUES (1, 'PayAccess', 'PayAccess', 'Get instant access to our exclusive video', 199.00, 'INR', 30, '#4f46e5', NOW());
+VALUES (1, 'PayAccess', 'PayAccess', 'Get instant access to our video library', 199.00, 'INR', 0, '#4f46e5', NOW());

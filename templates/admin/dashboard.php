@@ -3,6 +3,7 @@
 /** @var array<string, mixed>               $stats */
 /** @var array<int, array<string, mixed>>   $chart */
 /** @var array<int, array<string, mixed>>   $recent */
+/** @var array{videos:int, bundles:int}      $library */
 $currency = (string) $settings['currency'];
 $maxDay = 0.0;
 foreach ($chart as $day) {
@@ -11,6 +12,7 @@ foreach ($chart as $day) {
 $razorpayReady = app()->settings->isRazorpayConfigured();
 $logo = app()->settings->logoUrl();
 $chartTotal = array_sum(array_column($chart, 'total'));
+$lifetimeDefault = (int) $settings['access_days'] === 0;
 ?>
 <?php if (!$razorpayReady && !(int) $settings['demo_mode']): ?>
     <div class="alert alert--warning alert--lg">
@@ -115,7 +117,9 @@ $chartTotal = array_sum(array_column($chart, 'total'));
 
         <dl class="mini-list">
             <div><dt>Price</dt><dd class="strong"><?= e(money($settings['amount'], $currency)) ?></dd></div>
-            <div><dt>Access window</dt><dd><?= (int) $settings['access_days'] ?> days</dd></div>
+            <div><dt>Access window</dt>
+                <dd><?= $lifetimeDefault ? 'No expiry' : ((int) $settings['access_days'] . ' days') ?></dd>
+            </div>
             <div><dt>Razorpay</dt>
                 <dd>
                     <span class="badge <?= $razorpayReady ? 'badge--success' : 'badge--warning' ?>">
@@ -123,23 +127,28 @@ $chartTotal = array_sum(array_column($chart, 'total'));
                     </span>
                 </dd>
             </div>
-            <div><dt>Video</dt>
+            <div><dt>Videos on sale</dt>
                 <dd>
-                    <?php if (youtube_id($settings['youtube_video_url'])): ?>
-                        <span class="badge badge--success">Linked</span>
-                    <?php else: ?>
-                        <span class="badge badge--warning">Missing</span>
-                    <?php endif; ?>
+                    <a class="link" href="<?= e(url('admin/videos.php')) ?>"><?= (int) $library['videos'] ?> of
+                        <?= count(app()->catalog->videos(false)) ?></a>
                 </dd>
+            </div>
+            <div><dt>Bundles on sale</dt>
+                <dd><a class="link" href="<?= e(url('admin/bundles.php')) ?>"><?= (int) $library['bundles'] ?></a></dd>
             </div>
             <div><dt>Demo mode</dt>
                 <dd><span class="badge <?= (int) $settings['demo_mode'] ? 'badge--info' : 'badge--muted' ?>"><?= (int) $settings['demo_mode'] ? 'On' : 'Off' ?></span></dd>
             </div>
         </dl>
 
-        <a class="btn btn--ghost btn--block btn--sm" href="<?= e(url('')) ?>" target="_blank" rel="noopener">
-            <?= icon('external-link', 16) ?> Open public page
-        </a>
+        <div class="save-bar__actions">
+            <a class="btn btn--primary btn--block btn--sm" href="<?= e(url('admin/video.php')) ?>">
+                <?= icon('upload', 16) ?> Add a video
+            </a>
+            <a class="btn btn--ghost btn--block btn--sm" href="<?= e(url('')) ?>" target="_blank" rel="noopener">
+                <?= icon('external-link', 16) ?> Open public page
+            </a>
+        </div>
     </aside>
 </section>
 

@@ -19,6 +19,7 @@ require_once APP_ROOT . '/lib/youtube.php';
 require_once APP_ROOT . '/lib/settings.php';
 require_once APP_ROOT . '/lib/razorpay.php';
 require_once APP_ROOT . '/lib/payments.php';
+require_once APP_ROOT . '/lib/catalog.php';
 require_once APP_ROOT . '/lib/schema.php';
 require_once APP_ROOT . '/lib/icons.php';
 require_once APP_ROOT . '/lib/view.php';

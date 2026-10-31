@@ -6,6 +6,8 @@ $current = isset($activeNav) && $activeNav !== '' ? (string) $activeNav : basena
 $logo = app()->settings->logoUrl();
 $nav = [
     ['file' => 'index.php',    'label' => 'Dashboard',    'icon' => 'grid'],
+    ['file' => 'videos.php',   'label' => 'Videos',       'icon' => 'youtube'],
+    ['file' => 'bundles.php',  'label' => 'Bundles',      'icon' => 'tag'],
     ['file' => 'payments.php', 'label' => 'Payments',     'icon' => 'credit-card'],
     ['file' => 'settings.php', 'label' => 'Site settings','icon' => 'sliders'],
     ['file' => 'admins.php',   'label' => 'Admin users',  'icon' => 'users'],

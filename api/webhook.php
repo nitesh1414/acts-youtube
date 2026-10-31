@@ -78,6 +78,7 @@ switch ($event) {
                 'notes'      => 'Confirmed via webhook',
             ]);
             $fresh = app()->payments->find($payment['id']);
+            catalog_grant_for_payment($fresh);
             issue_access($fresh);
             app()->payments->logEvent($payment['id'], 'payment.captured.webhook', 'Payment confirmed by webhook');
         }

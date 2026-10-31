@@ -24,7 +24,7 @@ $webhookSet = trim((string) $settings['razorpay_webhook_secret']) !== '';
 <nav class="tabs" aria-label="Settings sections">
     <a href="#branding"><?= icon('image', 16) ?> Branding</a>
     <a href="#payments"><?= icon('credit-card', 16) ?> Payments</a>
-    <a href="#content"><?= icon('youtube', 16) ?> Video</a>
+    <a href="#content"><?= icon('youtube', 16) ?> Fallback video</a>
     <a href="#access"><?= icon('lock', 16) ?> Access</a>
     <a href="#contact"><?= icon('mail', 16) ?> Support</a>
 </nav>
@@ -114,12 +114,13 @@ $webhookSet = trim((string) $settings['razorpay_webhook_secret']) !== '';
 
         <div class="form-grid">
             <div class="field">
-                <label for="amount">Price (<?= e($currency) ?>)</label>
+                <label for="amount">Fallback price (<?= e($currency) ?>)</label>
                 <div class="input-prefix">
                     <span><?= e(currency_symbol($currency)) ?></span>
                     <input class="input" id="amount" name="amount" type="number" min="1" max="500000" step="0.01"
                            value="<?= e($value('amount', $settings['amount'])) ?>" required>
                 </div>
+                <p class="hint">Used only for the fallback single video. Real prices come from each video.</p>
                 <?php if ($error('amount')): ?><p class="field__error"><?= e($error('amount')) ?></p><?php endif; ?>
             </div>
             <div class="field">
@@ -175,14 +176,24 @@ $webhookSet = trim((string) $settings['razorpay_webhook_secret']) !== '';
     <section class="card card--pad" id="content">
         <header class="card__head">
             <div>
-                <h2><?= icon('youtube', 18) ?> Video content</h2>
-                <p class="muted small">Use an <strong>unlisted</strong> YouTube video so only paying customers can watch it.</p>
+                <h2><?= icon('youtube', 18) ?> Legacy single video</h2>
+                <p class="muted small">Only used when the video library is empty. Manage real videos in <a href="<?= e(url('admin/videos.php')) ?>">Videos</a>.</p>
             </div>
+            <span class="badge badge--muted">Fallback</span>
         </header>
+
+        <div class="alert alert--info">
+            <?= icon('info', 18) ?>
+            <span>
+                Videos and prices now live in <a href="<?= e(url('admin/videos.php')) ?>">Videos</a>, and groups of videos
+                in <a href="<?= e(url('admin/bundles.php')) ?>">Bundles</a>. The fields below are a fallback used only while
+                the library has no videos (for example right after upgrading).
+            </span>
+        </div>
 
         <div class="form-grid">
             <div class="field field--full">
-                <label for="youtube_video_url">YouTube video link</label>
+                <label for="youtube_video_url">Fallback YouTube video link</label>
                 <input class="input" id="youtube_video_url" name="youtube_video_url" value="<?= e($value('youtube_video_url', $settings['youtube_video_url'])) ?>"
                        placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX" data-youtube-input>
                 <p class="hint">Accepts watch, youtu.be, shorts, live and embed links.</p>
@@ -208,16 +219,19 @@ $webhookSet = trim((string) $settings['razorpay_webhook_secret']) !== '';
         <header class="card__head">
             <div>
                 <h2><?= icon('lock', 18) ?> Access</h2>
-                <p class="muted small">How long a buyer keeps access to the video after paying.</p>
+                <p class="muted small">How long a buyer keeps the videos they paid for.</p>
             </div>
         </header>
 
         <div class="form-grid">
             <div class="field">
                 <label for="access_days">Access duration (days)</label>
-                <input class="input" id="access_days" name="access_days" type="number" min="1" max="3650" step="1"
+                <input class="input" id="access_days" name="access_days" type="number" min="0" max="3650" step="1"
                        value="<?= e($value('access_days', (string) $settings['access_days'])) ?>" required>
-                <p class="hint">Buyers can restore their link within this window using e-mail + mobile.</p>
+                <p class="hint">
+                    <strong>0 = forever.</strong> Buyers keep their purchased videos in their library with no expiry date.
+                    Any other number limits access (and link restoring) to that many days.
+                </p>
                 <?php if ($error('access_days')): ?><p class="field__error"><?= e($error('access_days')) ?></p><?php endif; ?>
             </div>
         </div>

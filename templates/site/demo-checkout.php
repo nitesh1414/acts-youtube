@@ -2,6 +2,10 @@
 /** @var array<string, mixed> $payment */
 /** @var array<string, mixed> $settings */
 $currency = (string) $payment['currency'];
+$isBundle = isset($payment['product_type']) && $payment['product_type'] === 'bundle';
+$productName = isset($payment['product_name']) && $payment['product_name'] !== ''
+    ? (string) $payment['product_name']
+    : 'Access to the video';
 ?>
 <section class="section">
     <div class="wrap section__inner section__inner--narrow">
@@ -20,6 +24,7 @@ $currency = (string) $payment['currency'];
             </header>
 
             <dl class="detail-list">
+                <div><dt>Product</dt><dd class="strong"><?= e($productName) ?> <span class="badge badge--muted tiny"><?= $isBundle ? 'Bundle' : 'Video' ?></span></dd></div>
                 <div><dt>Customer</dt><dd><?= e($payment['user_name']) ?></dd></div>
                 <div><dt>E-mail</dt><dd><?= e($payment['user_email']) ?></dd></div>
                 <div><dt>Mobile</dt><dd><?= e(display_mobile($payment['user_mobile'])) ?></dd></div>

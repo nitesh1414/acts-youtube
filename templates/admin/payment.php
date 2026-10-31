@@ -7,6 +7,11 @@ $currency = isset($payment['currency']) && $payment['currency'] !== '' ? (string
 $token = isset($payment['access_token']) ? (string) $payment['access_token'] : '';
 $accessValid = Payments::accessIsValid($payment);
 $daysLeft = access_days_left($payment);
+$lifetime = $daysLeft === null;
+$isBundle = isset($payment['product_type']) && $payment['product_type'] === 'bundle';
+$productName = isset($payment['product_name']) && $payment['product_name'] !== ''
+    ? (string) $payment['product_name']
+    : 'Legacy single video';
 ?>
 <a class="link small back-link" href="<?= e(url('admin/payments.php')) ?>"><?= icon('arrow-left', 15) ?> All payments</a>
 
@@ -45,6 +50,15 @@ $daysLeft = access_days_left($payment);
                     <?php endif; ?>
                 </dd>
             </div>
+            <div><dt>Product</dt>
+                <dd>
+                    <strong><?= e($productName) ?></strong>
+                    <span class="badge badge--muted tiny"><?= $isBundle ? 'Bundle' : ($payment['product_type'] === 'video' ? 'Single video' : 'Legacy') ?></span>
+                </dd>
+            </div>
+            <?php if (!empty($payment['product_id'])): ?>
+                <div><dt>Product id</dt><dd class="mono small"><?= e($payment['product_type']) ?>:<?= (int) $payment['product_id'] ?></dd></div>
+            <?php endif; ?>
             <div><dt>Method</dt><dd><?= e(!empty($payment['method']) ? $payment['method'] : '—') ?></dd></div>
             <div><dt>Created</dt><dd><?= e(date_display($payment['created_at'])) ?></dd></div>
             <div><dt>Paid at</dt><dd><?= e(date_display($payment['paid_at'])) ?></dd></div>
@@ -60,14 +74,24 @@ $daysLeft = access_days_left($payment);
         <header class="card__head">
             <h2>Video access</h2>
             <span class="badge <?= $accessValid ? 'badge--success' : 'badge--muted' ?>">
-                <?= $accessValid ? $daysLeft . ' day' . ($daysLeft === 1 ? '' : 's') . ' left' : 'No active access' ?>
+                <?php if (!$accessValid): ?>
+                    No active access
+                <?php elseif ($lifetime): ?>
+                    Lifetime access
+                <?php else: ?>
+                    <?= (int) $daysLeft ?> day<?= $daysLeft === 1 ? '' : 's' ?> left
+                <?php endif; ?>
             </span>
         </header>
 
         <?php if ($payment['status'] === 'success'): ?>
             <p class="muted small">
-                Share this private link with the customer (or use it yourself to test). It works until
-                <strong><?= e(date_display($payment['access_expires_at'])) ?></strong>.
+                Share this private link with the customer (or use it yourself to test).
+                <?php if ($lifetime): ?>
+                    It has <strong>no expiry</strong> — it keeps working for as long as the site is up.
+                <?php else: ?>
+                    It works until <strong><?= e(date_display($payment['access_expires_at'])) ?></strong>.
+                <?php endif; ?>
             </p>
             <div class="copy-row">
                 <input class="input mono small" type="text" readonly value="<?= e($accessLink) ?>" data-select-on-focus aria-label="Private access link">
@@ -80,6 +104,7 @@ $daysLeft = access_days_left($payment);
                 <div class="field">
                     <label for="days">Extend access by</label>
                     <select class="input" id="days" name="days">
+                        <option value="0" <?= (int) $settings['access_days'] === 0 ? 'selected' : '' ?>>No expiry (lifetime)</option>
                         <?php foreach ([7, 30, 90, 365] as $days): ?>
                             <option value="<?= $days ?>" <?= (int) $settings['access_days'] === $days ? 'selected' : '' ?>><?= $days ?> days</option>
                         <?php endforeach; ?>
@@ -95,6 +120,32 @@ $daysLeft = access_days_left($payment);
         <?php endif; ?>
     </aside>
 </div>
+
+<section class="card card--pad">
+    <header class="card__head">
+        <h2><?= icon('youtube', 18) ?> Unlocked videos</h2>
+        <span class="muted small"><?= count($videos) ?> video<?= count($videos) === 1 ? '' : 's' ?></span>
+    </header>
+    <?php if (empty($videos)): ?>
+        <p class="muted small">
+            <?php if ($payment['status'] === 'success'): ?>
+                This purchase has no linked videos (it may be a legacy single-video order whose link lives on the Site settings page).
+            <?php else: ?>
+                Videos are attached to this payment once it succeeds.
+            <?php endif; ?>
+        </p>
+    <?php else: ?>
+        <ul class="bundle-row__videos">
+            <?php foreach ($videos as $video): ?>
+                <li>
+                    <?= icon('play', 13) ?>
+                    <a href="<?= e(url('admin/video.php?id=' . (int) $video['id'])) ?>"><?= e($video['title']) ?></a>
+                    <span class="muted tiny"><?= e(money((float) $video['price'], $currency)) ?><?= $video['is_active'] ? '' : ' · hidden' ?></span>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    <?php endif; ?>
+</section>
 
 <section class="card card--pad">
     <header class="card__head">

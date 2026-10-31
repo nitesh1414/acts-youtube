@@ -135,6 +135,68 @@
     });
 
     /* --------------------------------------------------------------------- */
+    /* Product selection (videos / bundles → checkout card)                   */
+    /* --------------------------------------------------------------------- */
+    function selectProduct(trigger) {
+        const form = document.getElementById('payment-form');
+        if (!form) { return; }
+
+        const type = trigger.getAttribute('data-type') || 'video';
+        const id = trigger.getAttribute('data-id') || '0';
+        const name = trigger.getAttribute('data-name') || '';
+        const label = trigger.getAttribute('data-label') || '';
+        const period = trigger.getAttribute('data-period') || '';
+        const paise = trigger.getAttribute('data-price') || '0';
+
+        const typeInput = form.querySelector('#item-type');
+        const idInput = form.querySelector('#item-id');
+        if (typeInput) { typeInput.value = type; }
+        if (idInput) { idInput.value = id; }
+
+        form.dataset.amountPaise = paise;
+        form.dataset.amountLabel = label;
+        form.dataset.productName = name;
+
+        const nameNode = document.getElementById('pay-product-name');
+        const priceNode = document.getElementById('pay-price');
+        const periodNode = document.getElementById('pay-period');
+        const buttonLabel = form.querySelector('#pay-button .btn__label');
+
+        if (nameNode) { nameNode.textContent = name; }
+        if (priceNode) { priceNode.textContent = label; }
+        if (periodNode) { periodNode.textContent = period ? '/ ' + period : ''; }
+        if (buttonLabel) { buttonLabel.textContent = 'Pay ' + label + ' & unlock'; }
+
+        document.querySelectorAll('[data-product-card]').forEach(function (card) {
+            card.classList.toggle('is-selected', card === trigger.closest('[data-product-card]'));
+        });
+
+        // Keep the URL shareable: ?buy=video:3
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('buy', type + ':' + id);
+            window.history.replaceState({}, '', url.toString());
+        } catch (e) { /* older browsers: ignore */ }
+
+        const checkout = document.getElementById('checkout');
+        if (checkout) {
+            checkout.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        const nameField = form.querySelector('#name');
+        if (nameField) {
+            window.setTimeout(function () { nameField.focus({ preventScroll: true }); }, 350);
+        }
+    }
+
+    document.addEventListener('click', function (event) {
+        const trigger = event.target.closest('[data-buy]');
+        if (!trigger) { return; }
+        // Without JavaScript the link still works: it reloads with ?buy=type:id.
+        event.preventDefault();
+        selectProduct(trigger);
+    });
+
+    /* --------------------------------------------------------------------- */
     /* Checkout                                                               */
     /* --------------------------------------------------------------------- */
     function razorpayConfigured(form) {
@@ -152,7 +214,7 @@
             amount: order.amount || parseInt(form.dataset.amountPaise, 10),
             currency: order.currency || form.dataset.currency || 'INR',
             name: order.name || form.dataset.siteName || 'PayAccess',
-            description: order.description || 'Access to the private video',
+            description: order.description || ('Access to ' + (form.dataset.productName || 'the video library')),
             order_id: order.order_id,
             prefill: {
                 name: form.querySelector('#name').value.trim(),
@@ -219,10 +281,15 @@
             setBusy(button, true);
 
             try {
+                const typeInput = form.querySelector('#item-type');
+                const idInput = form.querySelector('#item-id');
+
                 const order = await postJSON(form.dataset.endpoint, {
                     name: form.querySelector('#name').value.trim(),
                     email: form.querySelector('#email').value.trim(),
                     mobile: form.querySelector('#mobile').value.trim(),
+                    item_type: typeInput ? typeInput.value : '',
+                    item_id: idInput ? idInput.value : '',
                     _token: form.dataset.csrf
                 }, form.dataset.csrf);
 

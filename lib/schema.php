@@ -13,7 +13,7 @@
 final class Schema
 {
     /** Bump when the definition below changes (invalidates the cached check). */
-    const VERSION = 2;
+    const VERSION = 3;
 
     /**
      * Column definitions, primary key and indexes for every table.
@@ -39,7 +39,7 @@ final class Schema
                     'youtube_channel_url'     => 'VARCHAR(255) DEFAULT NULL',
                     'support_email'           => 'VARCHAR(190) DEFAULT NULL',
                     'support_phone'           => 'VARCHAR(30) DEFAULT NULL',
-                    'access_days'             => 'SMALLINT UNSIGNED NOT NULL DEFAULT 30',
+                    'access_days'             => 'SMALLINT UNSIGNED NOT NULL DEFAULT 0',
                     'demo_mode'               => 'TINYINT(1) NOT NULL DEFAULT 0',
                     'theme_color'             => "CHAR(7) NOT NULL DEFAULT '#4f46e5'",
                     'updated_at'              => 'DATETIME DEFAULT NULL',
@@ -85,6 +85,9 @@ final class Schema
                     'ip_address'        => 'VARCHAR(45) DEFAULT NULL',
                     'user_agent'        => 'VARCHAR(255) DEFAULT NULL',
                     'notes'             => 'VARCHAR(255) DEFAULT NULL',
+                    'product_type'      => 'VARCHAR(10) DEFAULT NULL',
+                    'product_id'        => 'INT UNSIGNED DEFAULT NULL',
+                    'product_name'      => 'VARCHAR(160) DEFAULT NULL',
                     'created_at'        => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
                     'paid_at'           => 'DATETIME DEFAULT NULL',
                     'updated_at'        => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
@@ -98,6 +101,7 @@ final class Schema
                     'idx_payments_email'       => ['columns' => ['user_email'], 'unique' => false],
                     'idx_payments_mobile'      => ['columns' => ['user_mobile'], 'unique' => false],
                     'idx_payments_access_end'  => ['columns' => ['access_expires_at'], 'unique' => false],
+                    'idx_payments_product'     => ['columns' => ['product_type', 'product_id'], 'unique' => false],
                 ],
             ],
 
@@ -113,6 +117,72 @@ final class Schema
                 'primary' => 'id',
                 'indexes' => [
                     'idx_events_payment' => ['columns' => ['payment_id', 'created_at'], 'unique' => false],
+                ],
+            ],
+
+            'videos' => [
+                'columns' => [
+                    'id'          => 'INT UNSIGNED NOT NULL AUTO_INCREMENT',
+                    'title'       => 'VARCHAR(160) NOT NULL',
+                    'description' => 'TEXT DEFAULT NULL',
+                    'youtube_url' => 'VARCHAR(255) NOT NULL',
+                    'price'       => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
+                    'position'    => 'INT NOT NULL DEFAULT 0',
+                    'is_active'   => 'TINYINT(1) NOT NULL DEFAULT 1',
+                    'created_at'  => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+                    'updated_at'  => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+                ],
+                'primary' => 'id',
+                'indexes' => [
+                    'idx_videos_active' => ['columns' => ['is_active', 'position'], 'unique' => false],
+                ],
+            ],
+
+            'bundles' => [
+                'columns' => [
+                    'id'          => 'INT UNSIGNED NOT NULL AUTO_INCREMENT',
+                    'name'        => 'VARCHAR(160) NOT NULL',
+                    'description' => 'TEXT DEFAULT NULL',
+                    'price'       => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
+                    'position'    => 'INT NOT NULL DEFAULT 0',
+                    'is_active'   => 'TINYINT(1) NOT NULL DEFAULT 1',
+                    'created_at'  => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+                    'updated_at'  => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+                ],
+                'primary' => 'id',
+                'indexes' => [
+                    'idx_bundles_active' => ['columns' => ['is_active', 'position'], 'unique' => false],
+                ],
+            ],
+
+            'bundle_items' => [
+                'columns' => [
+                    'id'         => 'INT UNSIGNED NOT NULL AUTO_INCREMENT',
+                    'bundle_id'  => 'INT UNSIGNED NOT NULL',
+                    'video_id'   => 'INT UNSIGNED NOT NULL',
+                    'position'   => 'INT NOT NULL DEFAULT 0',
+                    'created_at' => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+                ],
+                'primary' => 'id',
+                'indexes' => [
+                    'uniq_bundle_video'      => ['columns' => ['bundle_id', 'video_id'], 'unique' => true],
+                    'idx_bundle_items_video' => ['columns' => ['video_id'], 'unique' => false],
+                ],
+            ],
+
+            // What each payment unlocks (snapshot: editing a bundle later must not
+            // add or remove videos from a completed purchase).
+            'payment_videos' => [
+                'columns' => [
+                    'id'         => 'INT UNSIGNED NOT NULL AUTO_INCREMENT',
+                    'payment_id' => 'INT UNSIGNED NOT NULL',
+                    'video_id'   => 'INT UNSIGNED NOT NULL',
+                    'created_at' => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+                ],
+                'primary' => 'id',
+                'indexes' => [
+                    'uniq_payment_video'        => ['columns' => ['payment_id', 'video_id'], 'unique' => true],
+                    'idx_payment_videos_video'  => ['columns' => ['video_id'], 'unique' => false],
                 ],
             ],
 
@@ -180,7 +250,7 @@ final class Schema
         $sql .= "-- Default settings row (ignored when it already exists).\n"
             . "INSERT IGNORE INTO `settings`\n"
             . "    (`id`, `site_name`, `logo_text`, `tagline`, `amount`, `currency`, `access_days`, `theme_color`, `updated_at`)\n"
-            . "VALUES (1, 'PayAccess', 'PayAccess', 'Get instant access to our exclusive video', 199.00, 'INR', 30, '#4f46e5', NOW());\n";
+            . "VALUES (1, 'PayAccess', 'PayAccess', 'Get instant access to our video library', 199.00, 'INR', 0, '#4f46e5', NOW());\n";
 
         return $sql;
     }
@@ -379,7 +449,7 @@ final class Schema
                 $db->exec(
                     "INSERT INTO `settings`
                         (`id`, `site_name`, `logo_text`, `tagline`, `amount`, `currency`, `access_days`, `theme_color`, `updated_at`)
-                     VALUES (1, 'PayAccess', 'PayAccess', 'Get instant access to our exclusive video', 199.00, 'INR', 30, '#4f46e5', NOW())"
+                     VALUES (1, 'PayAccess', 'PayAccess', 'Get instant access to our video library', 199.00, 'INR', 0, '#4f46e5', NOW())"
                 );
                 $report['data_changes'][] = 'Inserted the default settings row.';
                 $log('Inserted the default settings row.');
@@ -439,11 +509,110 @@ final class Schema
             }
         }
 
+        // --- Catalog bootstrap (v2 single video → v3 library) -----------------
+        // Creates one video from the old "YouTube video link" setting and gives
+        // every buyer who already paid access to it, so nothing that worked
+        // before this update stops working.
+        try {
+            $catalogReport = self::seedCatalog($db, $log);
+            foreach ($catalogReport as $change) {
+                $report['data_changes'][] = $change;
+            }
+        } catch (Throwable $e) {
+            $report['errors'][] = 'Could not prepare the video library: ' . $e->getMessage();
+            $log('Could not prepare the video library: ' . $e->getMessage());
+        }
+
         if ($report['ok']) {
             self::writeMarker();
         }
 
         return $report;
+    }
+
+    /**
+     * Turn the v2 single-video setup into the first entry of the video library.
+     *
+     * Runs once (only while the library is empty) and is completely additive:
+     * the settings row keeps its link, existing payments keep their token and
+     * gain an explicit entitlement to the video they paid for.
+     *
+     * @param  DatabaseInterface $db
+     * @param  callable          $log
+     * @return array<int, string> human readable changes for the update report
+     */
+    private static function seedCatalog(DatabaseInterface $db, $log)
+    {
+        $changes = [];
+
+        $videoCount = (int) $db->value('SELECT COUNT(*) FROM videos', [], 0);
+        if ($videoCount > 0) {
+            return $changes; // The owner already has a library; never touch it.
+        }
+
+        $settings = $db->first('SELECT * FROM settings WHERE id = 1 LIMIT 1');
+        if (!is_array($settings)) {
+            return $changes;
+        }
+
+        $videoUrl = isset($settings['youtube_video_url']) ? trim((string) $settings['youtube_video_url']) : '';
+        $videoId = null;
+
+        if ($videoUrl !== '') {
+            $title = trim((string) ($settings['site_name'] ?? ''));
+            if ($title === '') {
+                $title = 'Your video';
+            }
+            $price = isset($settings['amount']) ? (float) $settings['amount'] : 199.0;
+
+            $videoId = (int) $db->insert('videos', [
+                'title'       => db_limit($title, 160),
+                'description' => 'Your first video. Edit it in Admin → Videos.',
+                'youtube_url' => db_limit($videoUrl, 255),
+                'price'       => number_format(max(0, $price), 2, '.', ''),
+                'position'    => 1,
+                'is_active'   => 1,
+            ]);
+            $changes[] = 'Created the first video from your existing YouTube link.';
+            $log('Created the first video from the existing YouTube link.');
+
+            // Every past buyer keeps access to the video they paid for.
+            $payments = $db->all("SELECT id FROM payments WHERE status = 'success'");
+            $linked = 0;
+            foreach ($payments as $payment) {
+                try {
+                    $already = (int) $db->value('SELECT COUNT(*) FROM payment_videos WHERE payment_id = ?', [(int) $payment['id']], 0);
+                    if ($already > 0) {
+                        continue;
+                    }
+                    $db->insert('payment_videos', [
+                        'payment_id' => (int) $payment['id'],
+                        'video_id'   => $videoId,
+                    ]);
+                    $linked++;
+                } catch (Throwable $e) {
+                    $log('Could not link payment #' . $payment['id'] . ': ' . $e->getMessage());
+                }
+            }
+            if ($linked > 0) {
+                $changes[] = 'Gave ' . $linked . ' existing buyer(s) access to that video.';
+                $log('Gave ' . $linked . ' existing buyer(s) access to the video.');
+            }
+        }
+
+        // "Watch anytime" is the default from v3 on. The old default was 30 days;
+        // only rewrite that exact value so a deliberate choice is preserved.
+        if ((int) ($settings['access_days'] ?? 0) === 30) {
+            try {
+                $db->exec('UPDATE settings SET access_days = 0 WHERE id = 1');
+                $changes[] = 'Access is now unlimited (was 30 days) — set a number in Settings to limit it.';
+                $log('Set access to unlimited (was the old 30-day default).');
+            } catch (Throwable $e) {
+                $log('Could not change the access duration: ' . $e->getMessage());
+            }
+        }
+
+        return $changes;
     }
 
     /**

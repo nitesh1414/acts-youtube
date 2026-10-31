@@ -43,6 +43,7 @@ if ($payment['status'] === Payments::STATUS_SUCCESS) {
     if ($storedSignature !== '' && !hash_equals($storedSignature, $signature)) {
         json_response(['error' => 'This payment was already verified on another session. Please use “Restore access”.'], 409);
     }
+    catalog_grant_for_payment($payment); // idempotent: covers webhook-first flows
     if (!Payments::accessIsValid($payment)) {
         $access = issue_access($payment);
         $token = $access['token'];
@@ -103,6 +104,7 @@ try {
     ]);
 
     $fresh = app()->payments->find($payment['id']);
+    catalog_grant_for_payment($fresh);
     $access = issue_access($fresh);
 } catch (DatabaseException $e) {
     app_log('critical', 'Payment verified but the database update failed', [

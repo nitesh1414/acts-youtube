@@ -35,6 +35,8 @@ fputcsv($out, [
     'Name',
     'Email',
     'Mobile',
+    'Product',
+    'Product type',
     'Amount',
     'Currency',
     'Status',
@@ -43,7 +45,7 @@ fputcsv($out, [
     'Method',
     'Created at',
     'Paid at',
-    'Access expires',
+    'Access expires (blank = lifetime)',
     'IP',
 ], ',', '"', '\\');
 
@@ -62,6 +64,8 @@ foreach ($rows as $row) {
         $safe($row['user_name']),
         $safe($row['user_email']),
         $safe(display_mobile($row['user_mobile'])),
+        $safe(isset($row['product_name']) && $row['product_name'] !== '' ? $row['product_name'] : 'Legacy single video'),
+        isset($row['product_type']) && $row['product_type'] !== '' ? $row['product_type'] : 'single',
         number_format((float) $row['amount'], 2, '.', ''),
         $row['currency'],
         $row['status'],
@@ -70,7 +74,7 @@ foreach ($rows as $row) {
         $safe($row['method']),
         $row['created_at'],
         $row['paid_at'],
-        $row['access_expires_at'],
+        $row['access_expires_at'] === null || $row['access_expires_at'] === '' ? 'Lifetime' : $row['access_expires_at'],
         $safe($row['ip_address']),
     ], ',', '"', '\\');
 }

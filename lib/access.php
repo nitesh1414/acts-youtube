@@ -26,23 +26,29 @@ function issue_access(array $payment, $days = null)
         $_SESSION['access_token'] = $access['token'];
     }
 
-    set_access_cookie($access['token'], strtotime($access['expires_at']));
+    set_access_cookie($access['token'], $access['expires_at'] === null ? null : strtotime($access['expires_at']));
 
-    $app->payments->logEvent($payment['id'], 'access.granted', 'Access valid until ' . $access['expires_at']);
+    $app->payments->logEvent(
+        $payment['id'],
+        'access.granted',
+        $access['expires_at'] === null ? 'Lifetime access granted' : 'Access valid until ' . $access['expires_at']
+    );
 
     return $access;
 }
 
 /**
- * Store the access token cookie.
+ * Store the access token cookie. A null expiry means lifetime access: browsers
+ * still cap cookies, so use the longest lifetime they accept and refresh it on
+ * every visit.
  */
-function set_access_cookie($token, $expiresAt)
+function set_access_cookie($token, $expiresAt = null)
 {
     if (headers_sent()) {
         return;
     }
     setcookie(ACCESS_COOKIE, (string) $token, [
-        'expires'  => (int) $expiresAt,
+        'expires'  => $expiresAt === null ? time() + 400 * 86400 : (int) $expiresAt,
         'path'     => '/',
         'secure'   => is_https(),
         'httponly' => true,
@@ -107,12 +113,14 @@ function current_access_payment()
 }
 
 /**
- * Days remaining on an access pass.
+ * Days remaining on an access pass, or null when it never expires.
+ *
+ * @return int|null
  */
 function access_days_left(array $payment)
 {
     if (empty($payment['access_expires_at'])) {
-        return 0;
+        return null;
     }
     $remaining = strtotime((string) $payment['access_expires_at']) - time();
     return $remaining <= 0 ? 0 : (int) ceil($remaining / 86400);

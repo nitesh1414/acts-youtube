@@ -96,6 +96,7 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                 <thead>
                     <tr>
                         <th><a href="<?= e($sortLink('user_name')) ?>">Customer <?= $sortIcon('user_name') ?></a></th>
+                        <th>Product</th>
                         <th><a href="<?= e($sortLink('user_mobile')) ?>">Mobile <?= $sortIcon('user_mobile') ?></a></th>
                         <th><a href="<?= e($sortLink('amount')) ?>">Amount <?= $sortIcon('amount') ?></a></th>
                         <th><a href="<?= e($sortLink('status')) ?>">Status <?= $sortIcon('status') ?></a></th>
@@ -115,6 +116,18 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                                         <span class="muted small"><?= e($payment['user_email']) ?></span>
                                     </div>
                                 </div>
+                            </td>
+                            <td>
+                                <?php
+                                $productName = isset($payment['product_name']) && $payment['product_name'] !== ''
+                                    ? (string) $payment['product_name']
+                                    : 'Legacy single video';
+                                $type = isset($payment['product_type']) ? (string) $payment['product_type'] : 'single';
+                                ?>
+                                <span class="product-cell">
+                                    <strong><?= e(text_limit($productName, 42)) ?></strong>
+                                    <span class="badge badge--muted tiny"><?= $type === 'bundle' ? 'Bundle' : ($type === 'video' ? 'Video' : 'Legacy') ?></span>
+                                </span>
                             </td>
                             <td class="mono small"><?= e(display_mobile($payment['user_mobile'])) ?></td>
                             <td class="strong"><?= e(money_exact($payment['amount'], $payment['currency'] ?? 'INR')) ?></td>

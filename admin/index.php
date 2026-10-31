@@ -15,4 +15,5 @@ render('admin/dashboard', [
     'stats'     => app()->payments->stats(),
     'chart'     => app()->payments->dailyRevenue(14),
     'recent'    => app()->payments->recent(8),
+    'library'   => app()->catalog->counts(),
 ]);

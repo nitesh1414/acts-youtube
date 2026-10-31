@@ -10,7 +10,7 @@ $amount = (float) $settings['amount'];
                 <h1>Restore your access</h1>
                 <p>
                     Enter the <strong>same e-mail and mobile number</strong> you used at checkout.
-                    If we find a successful payment, your private video link is re-issued instantly —
+                    If we find a successful payment, your private library link is re-issued instantly —
                     no extra charge.
                 </p>
                 <ul class="checklist">

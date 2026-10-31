@@ -9,7 +9,7 @@ final class Settings
         'site_name'              => 'PayAccess',
         'logo_path'              => '',
         'logo_text'              => 'PayAccess',
-        'tagline'                => 'Get instant access to our exclusive video',
+        'tagline'                => 'Get instant access to our video library',
         'amount'                 => '199.00',
         'currency'               => 'INR',
         'razorpay_key_id'        => '',
@@ -19,7 +19,7 @@ final class Settings
         'youtube_channel_url'    => '',
         'support_email'          => '',
         'support_phone'          => '',
-        'access_days'            => 30,
+        'access_days'            => 0,
         'demo_mode'              => 0,
         'theme_color'            => '#4f46e5',
         'updated_at'             => null,
@@ -61,7 +61,8 @@ final class Settings
             }
         }
 
-        $settings['access_days'] = max(1, (int) $settings['access_days']);
+        // 0 = access never expires. Negative values are meaningless.
+        $settings['access_days'] = max(0, (int) $settings['access_days']);
         $settings['demo_mode'] = (int) $settings['demo_mode'] === 1 ? 1 : 0;
         $settings['amount'] = number_format((float) $settings['amount'], 2, '.', '');
         $settings['logo_path'] = (string) $settings['logo_path'];
@@ -156,9 +157,12 @@ final class Settings
         return $currency !== '' ? $currency : 'INR';
     }
 
+    /**
+     * Days of access granted after a payment; 0 means lifetime.
+     */
     public function accessDays()
     {
-        return max(1, (int) $this->all()['access_days']);
+        return max(0, (int) $this->all()['access_days']);
     }
 
     public function isDemoMode()
@@ -209,8 +213,8 @@ final class Settings
         }
 
         $accessDaysRaw = $value('access_days', (string) $current['access_days']);
-        if (!ctype_digit($accessDaysRaw) || (int) $accessDaysRaw < 1 || (int) $accessDaysRaw > 3650) {
-            $errors['access_days'] = 'Access duration must be between 1 and 3650 days.';
+        if (!ctype_digit($accessDaysRaw) || (int) $accessDaysRaw > 3650) {
+            $errors['access_days'] = 'Access duration must be 0 (forever) or a number of days up to 3650.';
         }
 
         $youtubeVideo = $value('youtube_video_url');

@@ -6,9 +6,9 @@ $amount = (float) $settings['amount'];
     <div class="wrap section__inner section__inner--narrow">
         <div class="card card--pad state state--locked">
             <span class="state__icon"><?= icon('lock', 32) ?></span>
-            <h1>This video is locked</h1>
+            <h1>Your library is locked</h1>
             <p>
-                The private video page needs a verified payment from this device.
+                This page shows the videos you bought, so it needs a verified payment — from this device or the private link we sent you.
                 If you already paid, restore your access with the e-mail and mobile number used at checkout.
             </p>
             <div class="state__actions">

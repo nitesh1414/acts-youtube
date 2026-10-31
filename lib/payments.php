@@ -45,6 +45,15 @@ final class Payments
             'payment_id'   => isset($data['payment_id']) ? db_limit($data['payment_id'], 64) : null,
             'ip_address'   => db_limit(client_ip(), 45),
             'user_agent'   => db_limit(isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : 'cli', 255),
+            'product_type' => isset($data['product_type']) && $data['product_type'] !== ''
+                ? db_limit((string) $data['product_type'], 10)
+                : null,
+            'product_id'   => isset($data['product_id']) && (int) $data['product_id'] > 0
+                ? (int) $data['product_id']
+                : null,
+            'product_name' => isset($data['product_name']) && (string) $data['product_name'] !== ''
+                ? db_limit((string) $data['product_name'], 160)
+                : null,
             'created_at'   => now(),
             'updated_at'   => now(),
         ];
@@ -88,6 +97,25 @@ final class Payments
             return null;
         }
         return $this->db->first('SELECT * FROM payments WHERE access_token = ? LIMIT 1', [$token]);
+    }
+
+    /**
+     * Every successful payment made by the same buyer (e-mail + mobile).
+     * Used to build a library that keeps older purchases too.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function allSuccessfulFor($email, $mobile)
+    {
+        $email = trim((string) $email);
+        $mobile = normalize_mobile((string) $mobile);
+        if ($email === '' || $mobile === '') {
+            return [];
+        }
+        return $this->db->all(
+            'SELECT * FROM payments WHERE user_email = ? AND user_mobile = ? AND status = ? ORDER BY paid_at ASC, id ASC',
+            [$email, $mobile, self::STATUS_SUCCESS]
+        );
     }
 
     /**
@@ -147,7 +175,10 @@ final class Payments
     public function grantAccess($id, $days)
     {
         $token = random_token(32);
-        $expiresAt = date('Y-m-d H:i:s', time() + max(1, (int) $days) * 86400);
+        // 0 (or null) days means "forever": the customer can watch any time.
+        $expiresAt = (int) $days > 0
+            ? date('Y-m-d H:i:s', time() + max(1, (int) $days) * 86400)
+            : null;
 
         $this->db->update(
             'payments',
@@ -167,8 +198,14 @@ final class Payments
         if ((string) $payment['status'] !== self::STATUS_SUCCESS) {
             return false;
         }
-        if (empty($payment['access_expires_at'])) {
+        // No token was issued yet (webhook confirmed but the buyer has not
+        // opened their link): treat as no access, they can use "Restore access".
+        if (empty($payment['access_token'])) {
             return false;
+        }
+        // An empty expiry means lifetime access (v3 default).
+        if (empty($payment['access_expires_at'])) {
+            return true;
         }
         return strtotime((string) $payment['access_expires_at']) >= time();
     }
@@ -272,8 +309,8 @@ final class Payments
         $q = isset($filters['q']) ? trim((string) $filters['q']) : '';
         if ($q !== '') {
             $like = like_term($q);
-            $clauses[] = '(user_name LIKE ? OR user_email LIKE ? OR user_mobile LIKE ? OR order_id LIKE ? OR payment_id LIKE ?)';
-            for ($i = 0; $i < 5; $i++) {
+            $clauses[] = '(user_name LIKE ? OR user_email LIKE ? OR user_mobile LIKE ? OR order_id LIKE ? OR payment_id LIKE ? OR product_name LIKE ?)';
+            for ($i = 0; $i < 6; $i++) {
                 $params[] = $like;
             }
         }

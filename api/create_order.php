@@ -39,9 +39,36 @@ if (app()->throttle->tooMany('create_order', $ip, 10, 600)) {
 app()->throttle->hit('create_order', $ip);
 
 $settings = app()->settings->all();
-$amount = (float) $settings['amount'];
 $currency = (string) $settings['currency'];
 $demoMode = (int) $settings['demo_mode'] === 1;
+
+// -----------------------------------------------------------------------------
+// What is being bought? The browser only sends an id — the price always comes
+// from the database, so a tampered request can never lower it.
+// -----------------------------------------------------------------------------
+$itemType = isset($input['item_type']) && is_scalar($input['item_type'])
+    ? strtolower(trim((string) $input['item_type']))
+    : '';
+$itemId = isset($input['item_id']) && is_scalar($input['item_id']) ? (int) $input['item_id'] : 0;
+
+if ($itemType !== '' && $itemType !== 'single') {
+    $product = catalog_product($itemType, $itemId, true);
+    if ($product === null) {
+        json_response(['error' => 'That video or bundle is no longer available. Please pick another one.'], 404);
+    }
+} else {
+    // Older page/bookmark: fall back to the first item on sale.
+    $storefront = catalog_storefront();
+    $product = catalog_selected_product($storefront, '');
+    if ($product === null) {
+        json_response(['error' => 'Nothing is on sale yet. Please check back soon.'], 503);
+    }
+}
+
+$amount = (float) $product['price'];
+$productType = (string) $product['type'];
+$productId = (int) $product['id'];
+$productName = (string) $product['name'];
 
 if ($amount <= 0) {
     json_response(['error' => 'The price is not configured yet. Please contact support.'], 503);
@@ -57,8 +84,11 @@ try {
         'user_name'   => $name,
         'user_email'  => $email,
         'user_mobile' => $mobile,
-        'amount'      => $amount,
-        'currency'    => $currency,
+        'amount'       => $amount,
+        'currency'     => $currency,
+        'product_type' => $productType,
+        'product_id'   => $productId,
+        'product_name' => $productName,
     ]);
 } catch (DatabaseException $e) {
     app_log('error', 'Could not create payment record: ' . $e->getMessage(), [
@@ -71,7 +101,10 @@ try {
     json_response(['error' => 'We could not start your payment. Please try again.'], 500);
 }
 
-app()->payments->logEvent($paymentId, 'order.created', 'Checkout started', ['amount' => $amount]);
+app()->payments->logEvent($paymentId, 'order.created', 'Checkout started', [
+    'amount'  => $amount,
+    'product' => $productType . ':' . $productId,
+]);
 
 // -----------------------------------------------------------------------------
 // Demo mode: return a link to the simulated checkout.
@@ -88,6 +121,7 @@ if ($demoMode) {
     json_response([
         'demo'          => true,
         'order_id'      => $orderId,
+        'product'       => ['type' => $productType, 'id' => $productId, 'name' => $productName],
         'payment_db_id' => $paymentId,
         'amount'        => (int) round($amount * 100),
         'currency'      => $currency,
@@ -120,9 +154,10 @@ app()->payments->logEvent($paymentId, 'order.created.razorpay', 'Razorpay order 
 json_response([
     'order_id'      => $order['id'],
     'payment_db_id' => $paymentId,
+    'product'       => ['type' => $productType, 'id' => $productId, 'name' => $productName],
     'amount'        => (int) $order['amount'],
     'currency'      => isset($order['currency']) ? $order['currency'] : $currency,
     'key_id'        => $razorpay->keyId(),
     'name'          => $settings['site_name'],
-    'description'   => 'Access to ' . $settings['logo_text'],
+    'description'   => 'Access to ' . $productName,
 ]);

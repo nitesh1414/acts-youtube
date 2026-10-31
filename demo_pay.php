@@ -41,6 +41,7 @@ if (is_post()) {
         ]);
 
         $fresh = app()->payments->find($payment['id']);
+        catalog_grant_for_payment($fresh);
         $access = issue_access($fresh);
 
         flash('success', 'Demo payment completed — welcome!');

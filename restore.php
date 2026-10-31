@@ -31,7 +31,7 @@ if (is_post()) {
             if (!$payment) {
                 app_log('notice', 'Access restore failed', ['email' => $email, 'ip' => $ip]);
                 $error = 'We could not find a successful payment with those details. Please double-check them or contact support.';
-            } elseif (empty($payment['access_expires_at']) || strtotime((string) $payment['access_expires_at']) < time()) {
+            } elseif (!Payments::accessIsValid($payment) && !empty($payment['access_expires_at'])) {
                 $error = 'Your access period has ended. Please contact support to renew it.';
             } else {
                 $access = issue_access($payment);
