@@ -36,7 +36,7 @@ final class Payments
     {
         $row = [
             'user_name'    => db_limit($data['user_name'], 120),
-            'user_email'   => db_limit(strtolower($data['user_email']), 190),
+            'user_email'   => db_limit(strtolower(isset($data['user_email']) ? (string) $data['user_email'] : ''), 190),
             'user_mobile'  => db_limit(normalize_mobile($data['user_mobile']), 20),
             'amount'       => number_format((float) $data['amount'], 2, '.', ''),
             'currency'     => isset($data['currency']) ? db_limit($data['currency'], 3) : 'INR',
@@ -100,35 +100,75 @@ final class Payments
     }
 
     /**
-     * Every successful payment made by the same buyer (e-mail + mobile).
-     * Used to build a library that keeps older purchases too.
+     * Every successful payment made with one mobile number, oldest first.
+     *
+     * The mobile number is the buyer's identity: the e-mail is optional at
+     * checkout, so two purchases with the same number belong to the same
+     * library even when one of them (or both) has no e-mail.
      *
      * @return array<int, array<string, mixed>>
      */
-    public function allSuccessfulFor($email, $mobile)
+    public function allSuccessfulForMobile($mobile)
     {
-        $email = trim((string) $email);
         $mobile = normalize_mobile((string) $mobile);
-        if ($email === '' || $mobile === '') {
+        if ($mobile === '' || strlen($mobile) < 7) {
             return [];
         }
         return $this->db->all(
-            'SELECT * FROM payments WHERE user_email = ? AND user_mobile = ? AND status = ? ORDER BY paid_at ASC, id ASC',
-            [$email, $mobile, self::STATUS_SUCCESS]
+            'SELECT * FROM payments WHERE user_mobile = ? AND status = ? ORDER BY paid_at ASC, id ASC',
+            [$mobile, self::STATUS_SUCCESS]
         );
     }
 
     /**
-     * Latest successful payment matching e-mail + mobile (access restore).
+     * Successful payments with one mobile number, newest first.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function successfulForMobile($mobile)
+    {
+        $mobile = normalize_mobile((string) $mobile);
+        if ($mobile === '' || strlen($mobile) < 7) {
+            return [];
+        }
+        return $this->db->all(
+            'SELECT * FROM payments WHERE user_mobile = ? AND status = ? ORDER BY paid_at DESC, id DESC',
+            [$mobile, self::STATUS_SUCCESS]
+        );
+    }
+
+    /**
+     * Find the buyer behind a restore request.
+     *
+     * Mobile is the identity. Without an e-mail the name is the proof ("Asha"
+     * matches "Asha Verma"); with an e-mail, that e-mail must be the one stored
+     * at checkout. The newest matching payment wins.
      *
      * @return array<string, mixed>|null
      */
-    public function findByEmailAndMobile($email, $mobile)
+    public function findForRestore($name, $mobile, $email = '')
     {
-        return $this->db->first(
-            'SELECT * FROM payments WHERE user_email = ? AND user_mobile = ? AND status = ? ORDER BY paid_at DESC, id DESC LIMIT 1',
-            [strtolower(trim((string) $email)), normalize_mobile($mobile), self::STATUS_SUCCESS]
-        );
+        $email = strtolower(trim((string) $email));
+        $name = (string) $name;
+
+        foreach ($this->successfulForMobile($mobile) as $payment) {
+            $storedEmail = strtolower(trim((string) ($payment['user_email'] ?? '')));
+
+            // When an e-mail is typed it must match the one stored at checkout;
+            // when it is left blank the name is the proof.
+            if ($email !== '') {
+                if ($storedEmail !== '' && $storedEmail === $email) {
+                    return $payment;
+                }
+                continue;
+            }
+
+            if (names_match((string) ($payment['user_name'] ?? ''), $name)) {
+                return $payment;
+            }
+        }
+
+        return null;
     }
 
     // -------------------------------------------------------------------------
@@ -361,7 +401,7 @@ final class Payments
                 COALESCE(SUM(CASE WHEN status = 'success' AND paid_at >= ? THEN amount ELSE 0 END), 0) AS revenue_today,
                 COALESCE(SUM(CASE WHEN status = 'success' AND paid_at >= ? THEN amount ELSE 0 END), 0) AS revenue_week,
                 COALESCE(SUM(CASE WHEN status = 'success' AND paid_at >= ? THEN amount ELSE 0 END), 0) AS revenue_month,
-                COUNT(DISTINCT CASE WHEN status = 'success' THEN user_email END) AS customers,
+                COUNT(DISTINCT CASE WHEN status = 'success' THEN NULLIF(user_mobile, '') END) AS customers,
                 COALESCE(SUM(CASE WHEN status = 'success' AND access_expires_at > ? THEN 1 ELSE 0 END), 0) AS active_access
             FROM payments",
             [$todayStart, $weekStart, $monthStart, $now]

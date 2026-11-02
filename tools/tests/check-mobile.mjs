@@ -293,8 +293,16 @@ for (const [label, needle] of REQUIRED_JS) {
 // ---------------------------------------------------------------------------
 const files = fs.readdirSync(outDir).filter(f => f.endsWith('.html'));
 
+let audited = 0;
+let skipped = 0;
 for (const file of files) {
     const html = fs.readFileSync(path.join(outDir, file), 'utf8');
+    // Redirecting POSTs render only a meta-refresh stub — nothing to audit.
+    if (!html.includes('<html') || !html.includes('</body>')) {
+        skipped++;
+        continue;
+    }
+    audited++;
     const isAdmin = html.includes('class="admin-body');
     const isAuth = html.includes('class="auth-body');
 
@@ -361,7 +369,9 @@ if (owned.includes('data-buy-bar')) fail('home-bundle-purchased.html', 'buy bar 
 
 // ---------------------------------------------------------------------------
 
-console.log('\n' + files.length + ' pages audited, ' + problems.length + ' problem(s)');
+console.log('\n' + audited + ' pages audited'
+    + (skipped ? ' (' + skipped + ' redirect stub(s) skipped)' : '')
+    + ', ' + problems.length + ' problem(s)');
 for (const problem of problems) {
     console.log('   ✗ ' + problem);
 }

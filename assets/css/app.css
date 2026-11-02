@@ -231,6 +231,12 @@ code { font-family: var(--mono); font-size: .88em; background: var(--surface-2);
 .form { display: grid; gap: 16px; }
 .field { display: grid; gap: 7px; align-content: start; }
 .field > label { font-size: .84rem; font-weight: 600; color: var(--text); }
+.field__optional {
+    display: inline-block; margin-left: 5px; padding: 1px 7px; border-radius: 999px;
+    font-size: .68rem; font-weight: 700; letter-spacing: .02em; text-transform: none;
+    color: var(--muted); background: var(--surface-2); border: 1px solid var(--line);
+    vertical-align: 1px;
+}
 .field--inline { gap: 0; }
 .field--full { grid-column: 1 / -1; }
 

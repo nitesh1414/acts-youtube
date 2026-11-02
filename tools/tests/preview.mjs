@@ -89,5 +89,6 @@ await render('admin-dashboard', adminShop, 'admin/index.php');
 await render('admin-payments', adminShop, 'admin/payments.php');
 await render('admin-settings', shop + 'fake_login();', 'admin/settings.php');
 await render('login', 'seed_videos($db); seed_bundle($db);', 'admin/login.php');
+await render('restore', shop + 'seed_payment($db, [\'user_email\' => \'\']);', 'restore.php');
 
 console.log('\nOpen ' + path.join(outDir, 'home.html'));

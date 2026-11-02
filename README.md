@@ -50,12 +50,15 @@ no build step, no Node.js required.
   single video inside it is marked *Owned*, because that video is in their library. Picking
   something they own shows a "You already own this — Watch now" panel instead of the pay
   form, so nobody is ever charged twice by accident.
-- Checkout form (name, e-mail, mobile) with inline validation and a Razorpay popup.
+- Checkout form (**name + mobile required, e-mail optional**) with inline validation and a
+  Razorpay popup. Leaving the e-mail blank is fully supported — the receipt simply omits it.
 - **Private library** after payment: every video the purchase unlocked, with an in-page
   player and a receipt (`success.php?t=…&v=3`). Opening it again later just works —
   access never expires unless you set an access window.
 - **Access restore**: buyers who clear cookies or switch devices recover their link with
-  the e-mail + mobile number used at checkout (rate limited).
+  the **mobile number + name** they paid with (rate limited). The e-mail is optional there
+  too — if one is typed it must match the receipt, otherwise the mobile number is the
+  identity and the name proves ownership ("Asha" matches "Asha Verma").
 - **Demo mode**: test the complete payment flow with no Razorpay account and no money.
 - Installable PWA (dynamic manifest, offline fallback page, service worker).
 - **Mobile app experience** on phones (≤ 760 px): compact sticky header, a fixed bottom
@@ -215,9 +218,10 @@ Both paths verify a signature (`HMAC-SHA256`) before touching the database.
 
 ```
 Visitor                App                                  Razorpay
-   │  name/email/mobile │                                      │
+   │ name/mobile[+email]│                                      │
    ├───────────────────►│ POST /api/create_order.php           │
-   │                    │  • validate input, rate limit        │
+   │                    │  • validate (email only if given)    │
+   │                    │  • rate limit                        │
    │                    │  • INSERT payment (status=pending)   │
    │                    │  • create order ────────────────────►│
    │                    │◄──────────── order_id ───────────────│
@@ -278,7 +282,8 @@ storefront reads all three:
 Because a bundle payment unlocks each of its videos in `payment_videos`, buying
 "Season One — Complete" makes the bundle card read *Purchased* **and** marks every single
 video inside it *Owned* on the video cards. Purchases from earlier visits are merged
-(matching e-mail + mobile), and a pending or failed payment never grants ownership.
+(matching mobile number — the e-mail is optional), and a pending or failed payment never
+grants ownership.
 
 If the product the page opens on is already owned, the checkout renders an
 `owned-card` — "You already own this", the reason (bought on its own / part of a bundle /
@@ -291,7 +296,13 @@ Buy links stay plain links in that state so picking something new reloads with `
 is `NULL`, the access token keeps working, and the buyer's library is available any time.
 Set a positive number in *Site settings → Access* to sell time-limited access instead;
 existing lifetime purchases are never shortened by changing the setting.
-- Buyers can recover access at `/restore.php` with the same e-mail + mobile (6 tries / 15 min).
+- Buyers can recover access at `/restore.php` with their **mobile number + name**
+  (6 tries / 15 min). The e-mail field there is optional; name matching ignores case,
+  extra spaces and punctuation, and works for non-Latin names.
+- The **mobile number is the buyer's identity**: `user_email` may be empty, so the library
+  (and the *Owned* state) is matched on `user_mobile`, never on an e-mail nobody had to give.
+  `findForRestore()` returns the newest successful payment for that number whose name
+  matches, or whose stored e-mail equals an e-mail the buyer typed.
 - Every step is written to `payment_events` and shown in the admin timeline.
 
 ---
@@ -358,7 +369,8 @@ design is untouched.
 | Headers | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, CSP |
 | Rate limits | Checkout (10/10 min per IP), access restore (6/15 min), admin login (5 per user+IP) |
 | Secrets | Razorpay secrets never re-rendered into HTML; logs exclude passwords and card data |
-| Enumeration | No public list of payments; tokens are 64 hex chars of `random_bytes` |
+| Enumeration | No public list of payments; tokens are 64 hex chars of `random_bytes`; access restore needs the mobile number **and** the buyer name (or the receipt e-mail) |
+| Optional e-mail | `user_email` is never a lookup key: the buyer is identified by the normalised mobile number, so a checkout without an e-mail cannot weaken access control |
 
 **Operational advice**
 
@@ -377,7 +389,7 @@ design is untouched.
 ```
 ├── index.php                 Storefront (library + bundles + checkout)
 ├── success.php               Private library (token protected, ?v= switches video)
-├── restore.php               Access recovery (e-mail + mobile)
+├── restore.php               Access recovery (mobile + name; e-mail optional)
 ├── demo_pay.php              Simulated checkout (demo mode only)
 ├── manifest.php              Dynamic PWA manifest (uses the uploaded logo)
 ├── sw.js                     Service worker (offline fallback)
@@ -667,7 +679,8 @@ Because payments touch money, verify these after any change:
    saving — and the pay button still shows the single-video price. Click *Choose the bundle
    instead* → the box switches to the bundle and the pay button updates; click the single
    video again → it switches back. Nothing is chosen automatically.
-6. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
+6. **Validation** — empty form, 3-digit mobile → inline errors, no order created; a blank
+   e-mail pays fine, a malformed one is rejected.
 7. **Product switch** — click *Buy video* on two different cards → the pay card and
    `?buy=` URL update; reload the URL → the same product is preselected.
 8. **Payment (test keys)** — successful payment → redirect to the library → the bought
@@ -679,8 +692,9 @@ Because payments touch money, verify these after any change:
    lists only what they paid for).
 11. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
 12. **Locked page** — open `/success.php` in a private window → the library is locked.
-13. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
-   access restored; wrong mobile → generic error; 7 attempts → rate-limit message.
+13. **Restore** — clear cookies, visit `/restore.php`, enter the **mobile number and name**
+   used at checkout → access restored (no e-mail needed). Add the receipt e-mail → still
+   works; type a different name → generic error; 7 attempts → rate-limit message.
 14. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
     the admin payment page says "Lifetime access", and the CSV shows `Lifetime`.
 15. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.

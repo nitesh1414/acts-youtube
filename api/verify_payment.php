@@ -114,7 +114,7 @@ try {
     ]);
     json_response([
         'error' => 'Your payment was verified, but we could not unlock the video automatically. '
-            . 'Please use “Restore access” with the same e-mail and mobile number, or contact support with '
+            . 'Please use “Restore access” with the mobile number and name you paid with, or contact support with '
             . 'payment id ' . $razorpayId . '.',
         'code'  => 'database_error',
     ], 500);

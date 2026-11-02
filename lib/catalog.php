@@ -550,15 +550,14 @@ function catalog_videos_for_payment(array $payment)
 
 /**
  * Everything one buyer may watch: every video from every successful payment
- * they made with the same e-mail + mobile, newest purchase first, no duplicates.
+ * they made with the same mobile number, newest purchase first, no duplicates.
  *
  * @param  array<string, mixed> $payment
  * @return array<int, array<string, mixed>>
  */
 function catalog_library_for_payment(array $payment)
 {
-    $payments = app()->payments->allSuccessfulFor(
-        isset($payment['user_email']) ? (string) $payment['user_email'] : '',
+    $payments = app()->payments->allSuccessfulForMobile(
         isset($payment['user_mobile']) ? (string) $payment['user_mobile'] : ''
     );
     if ($payments === []) {
@@ -581,7 +580,7 @@ function catalog_library_for_payment(array $payment)
 }
 
 /**
- * Every successful purchase of the same buyer (same e-mail + mobile), oldest
+ * Every successful purchase of the same buyer (same mobile number), oldest
  * first. An access token belongs to one payment, but a library belongs to the
  * person: buying a bundle and later a single video must merge.
  *
@@ -599,8 +598,9 @@ function catalog_buyer_payments($payment)
         return [];
     }
 
-    $payments = app()->payments->allSuccessfulFor(
-        isset($payment['user_email']) ? (string) $payment['user_email'] : '',
+    // Identity is the mobile number: the e-mail is optional at checkout, so it
+    // can never be part of the lookup.
+    $payments = app()->payments->allSuccessfulForMobile(
         isset($payment['user_mobile']) ? (string) $payment['user_mobile'] : ''
     );
 

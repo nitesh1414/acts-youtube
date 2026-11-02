@@ -354,11 +354,17 @@
             name: order.name || form.dataset.siteName || 'PayAccess',
             description: order.description || ('Access to ' + (form.dataset.productName || 'the video library')),
             order_id: order.order_id,
-            prefill: {
-                name: form.querySelector('#name').value.trim(),
-                email: form.querySelector('#email').value.trim(),
-                contact: form.querySelector('#mobile').value.trim()
-            },
+            prefill: (function () {
+                const details = {
+                    name: form.querySelector('#name').value.trim(),
+                    contact: form.querySelector('#mobile').value.trim()
+                };
+                const email = (form.querySelector('#email').value || '').trim();
+                if (email) {
+                    details.email = email; // optional at checkout — never send an empty one
+                }
+                return details;
+            })(),
             notes: { payment_db_id: String(order.payment_db_id) },
             theme: {
                 color: getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() || '#4f46e5'

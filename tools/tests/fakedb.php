@@ -443,7 +443,7 @@ final class FakeDatabase implements DatabaseInterface
             'revenue_week' => 0.0, 'revenue_month' => 0.0, 'customers' => 0,
             'active_access' => 0,
         ];
-        $emails = [];
+        $mobiles = [];
         foreach ($rows as $row) {
             $status = (string) ($row['status'] ?? '');
             $amount = (float) ($row['amount'] ?? 0);
@@ -459,7 +459,7 @@ final class FakeDatabase implements DatabaseInterface
             }
             $stats['success_count']++;
             $stats['revenue'] += $amount;
-            $emails[(string) ($row['user_email'] ?? '')] = true;
+            $mobiles[(string) ($row['user_mobile'] ?? '')] = true;
             if ($paidAt !== '' && $paidAt >= $todayStart) {
                 $stats['revenue_today'] += $amount;
             }
@@ -474,7 +474,9 @@ final class FakeDatabase implements DatabaseInterface
                 $stats['active_access']++;
             }
         }
-        $stats['customers'] = count($emails);
+        $stats['customers'] = count(array_filter(array_keys($mobiles), function ($mobile) {
+            return $mobile !== '';
+        }));
         return $stats;
     }
 

@@ -424,6 +424,57 @@ function normalize_mobile($mobile)
 }
 
 /**
+ * The e-mail to print on receipts and admin screens ("—" when a buyer chose not
+ * to leave one, because the field is optional at checkout).
+ */
+function display_email($email)
+{
+    $email = trim((string) $email);
+    return $email === '' ? '—' : $email;
+}
+
+/**
+ * Normalise a person's name for comparison: lower case, single spaces, and no
+ * punctuation, so "Asha  Verma." and "asha verma" are the same buyer.
+ */
+function name_key($name)
+{
+    $name = trim((string) $name);
+    $name = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
+    // Punctuation is noise in a name; letters and digits of every script stay,
+    // so "अनिल कुमार" survives as-is.
+    $cleaned = preg_replace("/[.,'\x{2019}\x{2018}\-_\/&()\[\]{}\"`]+/u", ' ', $name);
+    if ($cleaned === null) {
+        $cleaned = preg_replace("/[.,'\-_\/&()\[\]{}\"`]+/", ' ', $name);
+    }
+    $cleaned = (string) $cleaned;
+    $collapsed = preg_replace('/\s+/u', ' ', $cleaned);
+    if ($collapsed === null) {
+        $collapsed = preg_replace('/\s+/', ' ', $cleaned);
+    }
+    return trim((string) $collapsed);
+}
+
+/**
+ * Does a stored name match what the visitor typed?
+ *
+ * Exact after normalisation, or the stored full name contains the typed one as
+ * whole words ("Asha" matches "Asha Verma", but "Verm"/"shaw" does not).
+ */
+function names_match($stored, $given)
+{
+    $stored = name_key($stored);
+    $given = name_key($given);
+    if ($stored === '' || $given === '') {
+        return false;
+    }
+    if ($stored === $given) {
+        return true;
+    }
+    return strlen($given) >= 3 && strpos(' ' . $stored . ' ', ' ' . $given . ' ') !== false;
+}
+
+/**
  * Validate a mobile number (7-15 digits after normalisation).
  */
 function valid_mobile($mobile)

@@ -49,8 +49,16 @@ seed_bundle($db);
         // mobile app shell
         'data-tabbar', 'tabbar__item is-active', 'data-buy-bar', 'id="buy-bar-price"',
         'class="site-body has-tabbar',
+        // e-mail is optional, name + mobile are not
+        'Email address <span class="field__optional">optional</span>',
+        'placeholder="you@example.com (not required)"',
+        'id="name" name="name" type="text" autocomplete="name" placeholder="Your full name" required',
+        'id="mobile" name="mobile" type="tel" autocomplete="tel" inputmode="tel" placeholder="98765 43210" required',
     ],
-    hasNot: ['Bonus — Behind the Scenes', 'Fatal error', 'Warning:', 'Notice:'],
+    hasNot: [
+        'placeholder="you@example.com" required',
+        'Bonus — Behind the Scenes', 'Fatal error', 'Warning:', 'Notice:',
+    ],
     order: [
         // every buying option comes before anything informational
         ['hero__stats', 'id="bundles"'],
@@ -416,9 +424,94 @@ seed_payment($db);
 // ---------------------------------------------------------------------------
 
 scenario('restore-page', '', 'restore.php', {
-    has: ['Restore'],
-    hasNot: ['Fatal error', 'Warning:'],
+    has: [
+        'Restore access',
+        'Enter the <strong>mobile number and name</strong> you used at checkout',
+        'No e-mail or password needed',
+        'id="mobile" name="mobile" type="tel" autocomplete="tel" inputmode="tel" required',
+        'id="name" name="name" type="text" autocomplete="name" required',
+        'Email address <span class="field__optional">optional</span>',
+        'placeholder="you@example.com (not required)"',
+        'Your access does not expire',
+    ],
+    hasNot: [
+        'placeholder="you@example.com" required',
+        'Fatal error', 'Warning:',
+    ],
 });
+
+// ---------------------------------------------------------------------------
+// Restore access: mobile + name, e-mail optional (real POST through the form)
+// ---------------------------------------------------------------------------
+
+scenario('restore-post-mobile-name', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db, ['user_email' => '']);
+`, 'restore.php', {
+    has: ['http-equiv="refresh"', 'success.php?t='],
+    hasNot: ['Fatal error', 'Warning:', 'could not find'],
+}, {
+    post: { name: 'asha   verma', mobile: '98765 43210', email: '' },
+    csrf: true,
+    redirect: true,
+});
+
+scenario('restore-post-email-proof', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+`, 'restore.php', {
+    has: ['http-equiv="refresh"', 'success.php?t='],
+    hasNot: ['Fatal error', 'Warning:', 'could not find'],
+}, {
+    post: { name: 'A. Verma', mobile: '9876543210', email: 'Asha@Example.com' },
+    csrf: true,
+    redirect: true,
+});
+
+scenario('restore-post-wrong-name', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db, ['user_email' => '']);
+`, 'restore.php', {
+    has: [
+        'We could not find a successful payment for that mobile number and name',
+        'value="Ravi Kumar"',
+        'value="9876543210"',
+    ],
+    hasNot: ['http-equiv="refresh"', 'Fatal error', 'Warning:'],
+}, {
+    post: { name: 'Ravi Kumar', mobile: '9876543210', email: '' },
+    csrf: true,
+});
+
+scenario('restore-post-bad-email-format', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+`, 'restore.php', {
+    has: ['That e-mail address does not look right'],
+    hasNot: ['http-equiv="refresh"', 'Fatal error', 'Warning:'],
+}, {
+    post: { name: 'Asha Verma', mobile: '9876543210', email: 'not-an-email' },
+    csrf: true,
+});
+
+scenario('library-no-email', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db, ['user_email' => '']);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+`, 'success.php', {
+    has: [
+        'Episode One — The Beginning', 'Episode Two — The Return',
+        'Mobile', '+91 98765 43210', 'Your receipt',
+        // the library blurb falls back to the mobile number, never an empty gap
+        'mobile number +91 98765 43210',
+    ],
+    hasNot: ['Fatal error', 'Warning:', '<dt>Email</dt>', 'Undefined'],
+}, { get: { t: TOKEN } });
 
 scenario('login-page', '', 'admin/login.php', {
     has: ['Sign in', 'username'],
@@ -443,6 +536,8 @@ for (const s of scenarios) {
     let code = PRELUDE + s.seedCode;
     code += `$_GET = ${phpArray(s.opts.get ?? {})};\n`;
     code += `$_POST = ${phpArray(s.opts.post ?? {})};\n`;
+    if (s.opts.post && Object.keys(s.opts.post).length) code += "$_SERVER['REQUEST_METHOD'] = 'POST';\n";
+    if (s.opts.csrf) code += "$_POST['_token'] = csrf_token();\n";
     code += `$_REQUEST = array_merge($_GET, $_POST);\n`;
     code += `$_SERVER['QUERY_STRING'] = ${JSON.stringify(s.opts.query ?? '')};\n`;
     if (s.opts.login) code += 'fake_login();\n';
@@ -454,7 +549,8 @@ for (const s of scenarios) {
 
     try {
         assert(result.err.trim() === '', 'stderr: ' + result.err.slice(0, 400));
-        assert(html.length > 200, 'page looks empty (' + html.length + ' bytes)');
+        // A redirecting POST legitimately renders only a tiny meta-refresh page.
+        assert(html.length > 200 || s.opts.redirect, 'page looks empty (' + html.length + ' bytes)');
         assert(!/Fatal error|Uncaught (Error|Exception)|Parse error/i.test(html), 'PHP fatal in output');
         for (const needle of s.checks.has) contains(html, needle);
         for (const needle of s.checks.hasNot) notContains(html, needle);

@@ -113,7 +113,7 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                                     <span class="avatar"><?= e(initials($payment['user_name'])) ?></span>
                                     <div>
                                         <strong><?= e($payment['user_name']) ?></strong>
-                                        <span class="muted small"><?= e($payment['user_email']) ?></span>
+                                        <span class="muted small"><?= e(display_email($payment['user_email'])) ?></span>
                                     </div>
                                 </div>
                             </td>

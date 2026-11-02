@@ -21,8 +21,10 @@ $errors = [];
 if (text_length($name) < 2 || text_length($name) > 120) {
     $errors['name'] = 'Please enter your full name.';
 }
-if (!valid_email($email)) {
-    $errors['email'] = 'Please enter a valid e-mail address.';
+// Name + mobile are the only required details; the e-mail is optional and is
+// only validated when the buyer chooses to give one.
+if ($email !== '' && !valid_email($email)) {
+    $errors['email'] = 'That e-mail address does not look right. Leave it blank if you prefer.';
 }
 if (!valid_mobile($mobile)) {
     $errors['mobile'] = 'Please enter a valid mobile number.';
@@ -135,7 +137,7 @@ if ($demoMode) {
 try {
     $order = $razorpay->createOrder((int) round($amount * 100), 'rcpt_' . $paymentId, [
         'payment_db_id' => (string) $paymentId,
-        'customer'      => $email,
+        'customer'      => $email !== '' ? $email : normalize_mobile($mobile),
     ]);
 } catch (RazorpayException $e) {
     app()->payments->markFailed($paymentId, 'Order creation failed');

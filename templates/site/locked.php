@@ -9,7 +9,7 @@ $amount = (float) $settings['amount'];
             <h1>Your library is locked</h1>
             <p>
                 This page shows the videos you bought, so it needs a verified payment — from this device or the private link we sent you.
-                If you already paid, restore your access with the e-mail and mobile number used at checkout.
+                If you already paid, restore your access with the mobile number and name used at checkout.
             </p>
             <div class="state__actions">
                 <a class="btn btn--primary" href="<?= e(url('restore.php')) ?>">

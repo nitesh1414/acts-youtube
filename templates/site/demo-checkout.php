@@ -26,7 +26,7 @@ $productName = isset($payment['product_name']) && $payment['product_name'] !== '
             <dl class="detail-list">
                 <div><dt>Product</dt><dd class="strong"><?= e($productName) ?> <span class="badge badge--muted tiny"><?= $isBundle ? 'Bundle' : 'Video' ?></span></dd></div>
                 <div><dt>Customer</dt><dd><?= e($payment['user_name']) ?></dd></div>
-                <div><dt>E-mail</dt><dd><?= e($payment['user_email']) ?></dd></div>
+                <div><dt>E-mail</dt><dd><?= e(display_email($payment['user_email'])) ?></dd></div>
                 <div><dt>Mobile</dt><dd><?= e(display_mobile($payment['user_mobile'])) ?></dd></div>
                 <div><dt>Order ID</dt><dd class="mono small"><?= e($payment['order_id']) ?></dd></div>
                 <div><dt>Status</dt><dd><span class="badge badge--<?= e($payment['status']) ?>"><?= e(ucfirst($payment['status'])) ?></span></dd></div>

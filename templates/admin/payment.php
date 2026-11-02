@@ -20,7 +20,7 @@ $productName = isset($payment['product_name']) && $payment['product_name'] !== '
         <span class="avatar avatar--lg"><?= e(initials($payment['user_name'])) ?></span>
         <div>
             <h2><?= e($payment['user_name']) ?></h2>
-            <p class="muted"><?= e($payment['user_email']) ?> · <?= e(display_mobile($payment['user_mobile'])) ?></p>
+            <p class="muted"><?= e(display_email($payment['user_email'])) ?> · <?= e(display_mobile($payment['user_mobile'])) ?></p>
         </div>
     </div>
     <div class="detail-hero__side">

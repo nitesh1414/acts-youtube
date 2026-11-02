@@ -98,7 +98,9 @@ $purchasedCount = count($purchased);
                     <div><dt>Purchase</dt><dd class="strong"><?= e($productName) ?></dd></div>
                     <div><dt>Type</dt><dd><?= $isBundle ? 'Bundle · ' . count($videos) . ' videos' : 'Single video' ?></dd></div>
                     <div><dt>Amount paid</dt><dd class="strong"><?= e($amountLabel) ?></dd></div>
-                    <div><dt>Email</dt><dd><?= e($payment['user_email']) ?></dd></div>
+                    <?php if (trim((string) $payment['user_email']) !== ''): ?>
+                        <div><dt>Email</dt><dd><?= e($payment['user_email']) ?></dd></div>
+                    <?php endif; ?>
                     <div><dt>Mobile</dt><dd><?= e(display_mobile($payment['user_mobile'])) ?></dd></div>
                     <div><dt>Payment ID</dt><dd class="mono"><?= e(!empty($payment['payment_id']) ? $payment['payment_id'] : '—') ?></dd></div>
                     <div><dt>Paid on</dt><dd><?= e(date_display(!empty($payment['paid_at']) ? $payment['paid_at'] : $payment['created_at'])) ?></dd></div>
@@ -122,7 +124,11 @@ $purchasedCount = count($purchased);
                 <header class="library__head">
                     <h2><?= icon('youtube', 18) ?> Your library</h2>
                     <p class="muted small">
-                        Everything you have bought with <?= e($payment['user_email']) ?> — pick any video to watch it.
+                        Everything you have bought with
+                        <?= trim((string) $payment['user_email']) !== ''
+                            ? e($payment['user_email'])
+                            : 'mobile number ' . e(display_mobile($payment['user_mobile'])) ?>
+                        — pick any video to watch it.
                     </p>
                 </header>
 
@@ -164,7 +170,7 @@ $purchasedCount = count($purchased);
             <div class="success-next__item">
                 <span class="success-next__icon"><?= icon('clock', 20) ?></span>
                 <h3>Watch any time</h3>
-                <p><?= $lifetime ? 'This library has no expiry date.' : (int) $daysLeft . ' days of access left.' ?> Sign in from another device with your e-mail and mobile number.</p>
+                <p><?= $lifetime ? 'This library has no expiry date.' : (int) $daysLeft . ' days of access left.' ?> Sign in from another device with your mobile number and name.</p>
             </div>
             <div class="success-next__item">
                 <span class="success-next__icon"><?= icon('tag', 20) ?></span>
@@ -174,7 +180,7 @@ $purchasedCount = count($purchased);
             <div class="success-next__item">
                 <span class="success-next__icon"><?= icon('refresh', 20) ?></span>
                 <h3>Need access later?</h3>
-                <p><a href="<?= e(url('restore.php')) ?>">Restore your access</a> any time with your e-mail and mobile number.</p>
+                <p><a href="<?= e(url('restore.php')) ?>">Restore your access</a> any time with your mobile number and name.</p>
             </div>
         </div>
     </div>

@@ -62,7 +62,7 @@ foreach ($rows as $row) {
     fputcsv($out, [
         $row['id'],
         $safe($row['user_name']),
-        $safe($row['user_email']),
+        $safe((string) ($row['user_email'] ?? '')),
         $safe(display_mobile($row['user_mobile'])),
         $safe(isset($row['product_name']) && $row['product_name'] !== '' ? $row['product_name'] : 'Legacy single video'),
         isset($row['product_type']) && $row['product_type'] !== '' ? $row['product_type'] : 'single',

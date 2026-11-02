@@ -20,7 +20,7 @@ npm install          # php-wasm (runs the PHP) + css-tree (parses the stylesheet
 | `node lint.mjs` | Every `.php` file parses (`token_get_all(..., TOKEN_PARSE)`). |
 | `node run-schema.mjs` | Schema v3 definition, drift detection, v2→v3 upgrade, fresh install, `sql/schema.sql` in sync. |
 | `node run-db.mjs` | Library logic: pricing, bundles and savings, entitlements, lifetime vs. limited access, payment search/export, and the "price always comes from the database" guarantees. |
-| `node run-pages.mjs` | Boots the real entry scripts (`index.php`, `success.php`, `admin/*.php`) against the fake DB and asserts on the rendered HTML — including **section order** and the bundle-savings nudge. Writes `out/<scenario>.html`. |
+| `node run-pages.mjs` | Boots the real entry scripts (`index.php`, `success.php`, `restore.php`, `admin/*.php`) against the fake DB and asserts on the rendered HTML — including **section order**, the bundle-savings nudge and real POSTs through the restore form (CSRF token injected with `csrf: true`). Writes `out/<scenario>.html`. |
 | `node check-html.mjs` | On the pages in `out/`: no leaked PHP, balanced tags, and every CSS class exists in `assets/css/app.css` or the JS. |
 | `node check-mobile.mjs` | Mobile/app-shell audit: the stylesheet parses and every declaration is valid, the phone rules actually win at 390 px and lose at 1280 px (a small cascade resolver), every page carries the device viewport + safe areas, the site has a 4-tab bottom bar and the admin a 5-tab one, and every admin table cell has the `data-label` its card layout needs. |
 | `node run-tools.mjs` | Runs `php tools/build-schema.php` and copies the regenerated `sql/schema.sql` back. |

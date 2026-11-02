@@ -42,7 +42,7 @@ if ($payment === null) {
 
 // What this purchase unlocked (snapshot taken at payment time)…
 $purchased = catalog_videos_for_payment($payment);
-// …and the whole library: every earlier purchase by the same e-mail + mobile.
+// …and the whole library: every earlier purchase with the same mobile number.
 $videos = catalog_library_for_payment($payment);
 $purchasedIds = [];
 foreach ($purchased as $video) {

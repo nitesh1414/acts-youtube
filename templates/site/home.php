@@ -569,11 +569,12 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                             </div>
                         </div>
                         <div class="field">
-                            <label for="email">Email address</label>
+                            <label for="email">Email address <span class="field__optional">optional</span></label>
                             <div class="field__control">
                                 <?= icon('mail', 18) ?>
-                                <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required maxlength="190">
+                                <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com (not required)" maxlength="190">
                             </div>
+                            <p class="hint">Only used on your receipt. Your mobile number restores access.</p>
                         </div>
                         <div class="field">
                             <label for="mobile">Mobile number</label>
@@ -654,7 +655,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                 <li class="step">
                     <span class="step__num">3</span>
                     <h3>Watch any time</h3>
-                    <p>Your videos are added to your private library. Come back on any device with your e-mail and mobile number.</p>
+                    <p>Your videos are added to your private library. Come back on any device with your mobile number.</p>
                 </li>
             </ol>
         </div>
@@ -688,7 +689,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
         </details>
         <details class="faq">
             <summary>I cleared my browser or changed device. Can I get access again?</summary>
-            <p>Yes. Open <a href="<?= e(url('restore.php')) ?>">Restore access</a> and enter the same e-mail and mobile number you paid with. We re-issue your access instantly.</p>
+            <p>Yes. Open <a href="<?= e(url('restore.php')) ?>">Restore access</a> and enter the mobile number and name you paid with — no e-mail needed. We re-issue your access instantly.</p>
         </details>
         <details class="faq">
             <summary>Which payment methods are supported?</summary>

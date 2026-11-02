@@ -34,6 +34,7 @@ const screens = [
     ['admin-videos.html', 'Admin · videos', 'Table becomes labelled cards'],
     ['admin-payments.html', 'Admin · payments', 'Filters, cards and paging'],
     ['admin-settings.html', 'Admin · settings', 'Long form with a sticky save bar'],
+    ['restore.html', 'Restore access', 'Mobile + name; e-mail optional'],
     ['login.html', 'Admin sign in', 'Full-bleed auth card'],
 ];
 

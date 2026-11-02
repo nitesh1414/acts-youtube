@@ -398,6 +398,89 @@ check(strpos($home, 'Purchased') !== false, 'purchased bundles are labelled');
 check(strpos($home, '$selectedOwned') !== false && strpos($home, 'id="payment-form"') !== false, 'the pay form only renders for products that are not owned');
 
 // ---------------------------------------------------------------------------
+// Identity: mobile number is required, e-mail is optional
+// ---------------------------------------------------------------------------
+reset_data();
+$db = fake_db();
+$catalog = app()->catalog;
+$payments = app()->payments;
+$ep1 = $catalog->createVideo(['title' => 'Ep 1', 'description' => '', 'youtube_url' => 'https://youtu.be/aaaaaaaaaaa', 'price' => 199, 'position' => 1, 'is_active' => true]);
+$ep2 = $catalog->createVideo(['title' => 'Ep 2', 'description' => '', 'youtube_url' => 'https://youtu.be/bbbbbbbbbbb', 'price' => 299, 'position' => 2, 'is_active' => true]);
+
+// A checkout with no e-mail at all must be accepted and stored as ''.
+$noEmail = $payments->create([
+    'order_id' => 'order_ne1', 'user_name' => 'Asha Verma', 'user_mobile' => '+91 98765 43210',
+    'amount' => 199, 'currency' => 'INR',
+    'product_type' => 'video', 'product_id' => $ep1, 'product_name' => 'Ep 1',
+]);
+$payments->markSuccess($noEmail, ['payment_id' => 'pay_ne1', 'method' => 'upi']);
+catalog_grant_for_payment($payments->find($noEmail));
+
+$stored = $payments->find($noEmail);
+check($stored['user_email'] === '', 'a checkout without e-mail is stored as an empty string');
+check($stored['user_mobile'] === '9876543210', 'the mobile number is normalised: ' . $stored['user_mobile']);
+
+// The same number with a different (or no) e-mail is the same buyer.
+$withEmail = $payments->create([
+    'order_id' => 'order_ne2', 'user_name' => 'Asha Verma', 'user_email' => 'Asha@Example.com',
+    'user_mobile' => '98765 43210', 'amount' => 299, 'currency' => 'INR',
+    'product_type' => 'video', 'product_id' => $ep2, 'product_name' => 'Ep 2',
+]);
+$payments->markSuccess($withEmail, ['payment_id' => 'pay_ne2', 'method' => 'card']);
+catalog_grant_for_payment($payments->find($withEmail));
+check($payments->find($withEmail)['user_email'] === 'asha@example.com', 'the e-mail is lower-cased when given');
+
+$buyerPayments = $payments->allSuccessfulForMobile('9876543210');
+check(count($buyerPayments) === 2, 'both purchases are found by mobile, got ' . count($buyerPayments));
+check($payments->allSuccessfulForMobile('') === [], 'an empty mobile matches nothing');
+
+$library = catalog_library_for_payment($payments->find($withEmail));
+check(count($library) === 2, 'the library merges the e-mail-less purchase, got ' . count($library));
+
+$state = catalog_owned_state($payments->find($noEmail));
+sort($state['videos']);
+check($state['videos'] === [$ep1, $ep2], 'ownership merges across e-mail-less and e-mailed purchases: ' . json_encode($state['videos']));
+
+// Restore access: name + mobile, e-mail optional.
+check($payments->findForRestore('Asha Verma', '9876543210') !== null, 'restore works with name + mobile only');
+check($payments->findForRestore('  asha   verma ', '+919876543210') !== null, 'restore is forgiving about case, spacing and the country code');
+check($payments->findForRestore('Asha', '9876543210') !== null, 'a first name matches the stored full name');
+check($payments->findForRestore('Asha Verma', '9876543210', 'asha@example.com') !== null, 'a matching e-mail is accepted');
+check($payments->findForRestore('Asha Verma', '9876543210', 'someone@example.com') === null, 'a wrong e-mail is rejected');
+check($payments->findForRestore('Ravi Kumar', '9876543210') === null, 'a wrong name is rejected');
+check($payments->findForRestore('Verm', '9876543210') === null, 'a partial name fragment is not enough');
+check($payments->findForRestore('Asha Verma', '9000000000') === null, 'an unknown mobile finds nothing');
+
+// Names in other scripts must not be mangled by the comparison.
+$nameKey = name_key('अनिल कुमार');
+check($nameKey !== '' && strpos($nameKey, 'अनिल') === 0, 'name_key keeps non-Latin letters: ' . $nameKey);
+check(names_match('अनिल कुमार', 'अनिल कुमार') === true, 'Devanagari names match exactly');
+check(names_match("Asha  Verma.", 'asha verma') === true, 'punctuation and spacing do not matter');
+check(names_match('Asha Verma', 'Verm') === false, 'a name fragment is not a match');
+check(display_email('') === '—' && display_email('a@b.in') === 'a@b.in', 'display_email hides the optional field');
+
+// A pending payment never restores access.
+$pendingOnly = $payments->create([
+    'order_id' => 'order_ne3', 'user_name' => 'Pending Person', 'user_mobile' => '9555555555',
+    'amount' => 199, 'currency' => 'INR', 'product_type' => 'video', 'product_id' => $ep1, 'product_name' => 'Ep 1',
+]);
+check($payments->findForRestore('Pending Person', '9555555555') === null, 'pending payments cannot be restored');
+
+// Customers are counted by mobile number, not by an optional e-mail.
+$stats = $payments->stats();
+check($stats['customers'] === 1, 'customers counts distinct mobile numbers, got ' . $stats['customers']);
+
+// The checkout controller must not require an e-mail either.
+$createOrder = (string) file_get_contents('/app/api/create_order.php');
+check(
+    strpos($createOrder, 'if ($email !== \'\' && !valid_email($email))') !== false,
+    'create_order only validates an e-mail that was actually given'
+);
+$restoreController = (string) file_get_contents('/app/restore.php');
+check(strpos($restoreController, 'findForRestore(') !== false, 'restore looks buyers up by name + mobile');
+check(strpos($restoreController, 'valid_email($email)') !== false, 'restore still validates an optional e-mail');
+
+// ---------------------------------------------------------------------------
 // Safety: the checkout price always comes from the database
 // ---------------------------------------------------------------------------
 $createOrder = (string) file_get_contents('/app/api/create_order.php');
