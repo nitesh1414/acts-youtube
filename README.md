@@ -239,8 +239,11 @@ Visitor                App                                  Razorpay
 
 - Every video is its own product with its own price. A bundle is a *named* set of videos
   sold for one payment; the name is what buyers see.
-- The storefront lists bundles first, then all single videos. Each video card also shows
-  the cheapest bundle that contains it: "Also in **Season One — Complete** — ₹399 for
+- The storefront lists bundles first, then all single videos. Every bundle card shows the
+  **thumbnails of the videos inside it** (two side by side, with a "+N" badge when the
+  bundle holds more) — the same YouTube images the single-video cards use — so buyers can
+  see what the bundle contains before reading a word. Each video card also shows the
+  cheapest bundle that contains it: "Also in **Season One — Complete** — ₹399 for
   2 videos, save ₹99".
 - Once a single video is selected, the checkout card explains the alternative
   (price per video, total if bought separately, the saving) and offers
@@ -591,9 +594,10 @@ admin with `update.php` (or let `install.php` add one). Old rows have no access 
 
 Because payments touch money, verify these after any change:
 
-1. **Storefront** — logo; then **bundle cards first** (name + contents + saving), then every
-   video card (own price) — both *above* the checkout form; how it works and the FAQ only
-   after the form; hero stats; mobile layout (375 px); demo-mode banner.
+1. **Storefront** — logo; then **bundle cards first** (thumbnail strip of the videos,
+   name, contents, saving), then every video card (image + own price) — both *above* the
+   checkout form; how it works and the FAQ only after the form; hero stats; mobile layout
+   (375 px) with the thumbnails still side by side; demo-mode banner.
 2. **Purchased state** — buy a bundle, then reopen the storefront: the bundle card says
    *Purchased* (and *Saved ₹99*), every video inside it says *Owned* with a **Watch** button,
    and `?buy=video:1` / `?buy=bundle:1` show the "You already own this" panel with no pay

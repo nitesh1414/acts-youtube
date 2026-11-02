@@ -32,6 +32,15 @@ require '/app/config.php';
 
 const TOKEN = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
+/**
+ * Preview-only: point the fixtures at real YouTube videos so the thumbnails
+ * actually load in a browser. The test suites keep their offline fake ids.
+ */
+const REAL_THUMBS = `
+$db->tables['videos'][0]['youtube_url'] = 'https://www.youtube.com/watch?v=jNQXAC9IVRw';
+$db->tables['videos'][1]['youtube_url'] = 'https://www.youtube.com/watch?v=9bZkp7q19f0';
+`;
+
 function polish(html) {
     return html
         .replace(/<link rel="manifest"[^>]*>\s*/g, '')
@@ -51,24 +60,23 @@ async function render(name, seed, script, get = {}) {
     console.log(name + ': ' + result.out.length + ' bytes');
 }
 
-const library = `
-seed_videos($db); seed_bundle($db);
+const shop = 'seed_videos($db); seed_bundle($db);' + REAL_THUMBS;
+const library = shop + `
 seed_payment($db);
 $db->tables['payments'][0]['access_token'] = '${TOKEN}';
 `;
 
-await render('home', 'seed_videos($db); seed_bundle($db);', 'index.php');
-await render('home-buy-video', 'seed_videos($db); seed_bundle($db);', 'index.php', { buy: 'video:1' });
-await render('home-buy-bundle', 'seed_videos($db); seed_bundle($db);', 'index.php', { buy: 'bundle:1' });
+await render('home', shop, 'index.php');
+await render('home-buy-video', shop, 'index.php', { buy: 'video:1' });
+await render('home-buy-bundle', shop, 'index.php', { buy: 'bundle:1' });
 
-const buyer = `seed_videos($db); seed_bundle($db);
-seed_payment($db);
+const buyer = shop + `seed_payment($db);
 $db->tables['payments'][0]['access_token'] = '${TOKEN}';
 $_SESSION['access_token'] = '${TOKEN}';`;
 await render('home-purchased', buyer, 'index.php');
 await render('home-purchased-bundle', buyer, 'index.php', { buy: 'bundle:1' });
 await render('library', library, 'success.php', { t: TOKEN });
-await render('admin-videos', 'seed_videos($db); seed_bundle($db); seed_payment($db); fake_login();', 'admin/videos.php');
+await render('admin-videos', shop + 'seed_payment($db); fake_login();', 'admin/videos.php');
 await render('admin-bundles', 'seed_videos($db); seed_bundle($db); fake_login();', 'admin/bundles.php');
 
 console.log('\nOpen ' + path.join(outDir, 'home.html'));

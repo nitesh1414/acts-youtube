@@ -229,7 +229,29 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                     }
                     $bundleWatchId = $bundle['videos'] !== [] ? (int) $bundle['videos'][0]['id'] : 0;
                     ?>
+                    <?php
+                    // The bundle's own picture: the thumbnails of the videos in it,
+                    // exactly like the single-video cards, so buyers can see what
+                    // they are getting at a glance.
+                    $bundleShots = array_slice($bundle['videos'], 0, 2);
+                    $bundleExtra = max(0, count($bundle['videos']) - count($bundleShots));
+                    ?>
                     <article class="bundle-card <?= $bundleYours ? 'is-owned' : '' ?>" data-product-card="bundle:<?= $bundleId ?>">
+                        <div class="bundle-card__media">
+                            <?php foreach ($bundleShots as $shotIndex => $shotVideo): ?>
+                                <span class="bundle-card__shot">
+                                    <?php if ($shotVideo['thumbnail'] !== ''): ?>
+                                        <img src="<?= e($shotVideo['thumbnail']) ?>" alt="" loading="lazy" width="320" height="180">
+                                    <?php else: ?>
+                                        <span class="vcard__placeholder"><?= icon('youtube', 24) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($bundleExtra > 0 && $shotIndex === count($bundleShots) - 1): ?>
+                                        <span class="bundle-card__more">+<?= $bundleExtra ?></span>
+                                    <?php endif; ?>
+                                </span>
+                            <?php endforeach; ?>
+                        </div>
+
                         <div class="bundle-card__head">
                             <div>
                                 <span class="chip chip--secure"><?= icon('tag', 13) ?> Bundle · <?= (int) $bundle['video_count'] ?> videos</span>

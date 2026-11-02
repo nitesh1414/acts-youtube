@@ -59,6 +59,13 @@ seed_bundle($db);
         // the bundle cards themselves are rendered above the single videos
         ['data-product-card="bundle:1"', 'data-product-card="video:1"'],
         ['Season One — Complete</h3>', 'Episode One — The Beginning</h3>'],
+        // the bundle's pictures sit above its title
+        ['bundle-card__media', 'Season One — Complete'],
+    ],
+    count: [
+        // both videos in the bundle + both single-video cards
+        ['bundle-card__shot', 2],
+        ['i.ytimg.com/vi/', 4],
     ],
 });
 
@@ -136,6 +143,17 @@ seed_videos($db);
     hasNot: ['Fatal error', 'Warning:', 'includes this video', 'data-suggest-id'],
 }, { query: '?buy=video:2', get: { buy: 'video:2' } });
 
+scenario('home-bundle-many-videos', `
+seed_videos($db);
+$db->tables['videos'][2]['is_active'] = 1;
+seed_bundle($db);
+$db->add('bundle_items', ['bundle_id' => 1, 'video_id' => 3, 'position' => 3, 'created_at' => now()]);
+`, 'index.php', {
+    has: ['bundle-card__media', 'bundle-card__more', '+1', 'Bundle · 3 videos'],
+    hasNot: ['Fatal error', 'Warning:'],
+    count: [['bundle-card__shot', 2]],
+});
+
 scenario('home-limited-access', `
 $db->tables["settings"][0]["access_days"] = "30";
 seed_videos($db);
@@ -174,6 +192,7 @@ $_SESSION['access_token'] = '${TOKEN}';
         'Included in <strong>Season One — Complete</strong>',
         '2 owned',
     ],
+    count: [['bundle-card__shot', 2]],
     hasNot: [
         'id="payment-form"', 'name="item_type"', 'Pay ₹',
         'Choose this bundle', 'id="save-hint"',
@@ -429,6 +448,10 @@ for (const s of scenarios) {
         assert(!/Fatal error|Uncaught (Error|Exception)|Parse error/i.test(html), 'PHP fatal in output');
         for (const needle of s.checks.has) contains(html, needle);
         for (const needle of s.checks.hasNot) notContains(html, needle);
+        for (const [needle, expected] of s.checks.count ?? []) {
+            const seen = html.split(needle).length - 1;
+            assert(seen === expected, JSON.stringify(needle) + ' should appear ' + expected + ' time(s), saw ' + seen);
+        }
         for (const [first, second] of s.checks.order ?? []) {
             const a = html.indexOf(first);
             const b = html.indexOf(second);
