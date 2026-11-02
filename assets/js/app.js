@@ -278,10 +278,18 @@
         const tabbar = document.querySelector('[data-tabbar]');
         if (!tabbar) { return; }
         const items = Array.prototype.slice.call(tabbar.querySelectorAll('[data-tab-anchor]'));
+        const isHome = document.body.classList.contains('site-home');
         const sections = [];
         items.forEach(function (item) {
-            const node = document.getElementById(item.getAttribute('data-tab-anchor') || '');
-            if (node) { sections.push(node); }
+            const anchor = item.getAttribute('data-tab-anchor') || '';
+            const node = document.getElementById(anchor);
+            if (node) {
+                sections.push(node);
+            } else if (isHome && anchor !== '') {
+                // Nothing of that kind is for sale on this storefront — do not
+                // offer a tab that goes nowhere.
+                item.hidden = true;
+            }
         });
         if (!sections.length) { return; }
 

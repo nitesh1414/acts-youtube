@@ -276,6 +276,7 @@ if (!css.includes(':focus-visible')) {
 // ---------------------------------------------------------------------------
 const REQUIRED_JS = [
     ['tab bar scroll spy', 'data-tab-anchor'],
+    ['empty sections hide their tab', 'item.hidden = true'],
     ['action bar hides at checkout', '[data-buy-bar]'],
     ['action bar price sync', "getElementById('buy-bar-price')"],
     ['drawer close buttons', "[data-sidebar-close]"],

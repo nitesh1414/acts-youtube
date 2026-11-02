@@ -1175,6 +1175,7 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
         box-shadow: inset 0 0 0 1px rgba(139, 92, 246, .35);
     }
     .tabbar__label { line-height: 1.1; }
+    .tabbar__item[hidden] { display: none; }
 
     /* ---------- "you are buying" action bar ------------------------------ */
     .buy-bar {
