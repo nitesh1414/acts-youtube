@@ -9,10 +9,13 @@
     "schema": "node run-schema.mjs",
     "db": "node run-db.mjs",
     "html": "node check-html.mjs",
+    "mobile": "node check-mobile.mjs",
     "schema-sql": "node run-tools.mjs",
-    "all": "node lint.mjs && node run-schema.mjs && node run-db.mjs && node run-pages.mjs && node check-html.mjs"
+    "preview": "node preview.mjs && node preview-mobile.mjs",
+    "all": "node lint.mjs && node run-schema.mjs && node run-db.mjs && node run-pages.mjs && node check-html.mjs && node check-mobile.mjs"
   },
   "dependencies": {
+    "css-tree": "^3.2.1",
     "php-wasm": "0.2.0"
   }
 }

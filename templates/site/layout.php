@@ -8,12 +8,15 @@ $logo = app() ? app()->settings->logoUrl() : '';
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <title><?= e($pageTitle) ?></title>
     <?php if (!empty($metaDescription)): ?>
         <meta name="description" content="<?= e($metaDescription) ?>">
     <?php endif; ?>
     <meta name="theme-color" content="<?= e($settings['theme_color']) ?>">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="robots" content="noindex, nofollow">
     <link rel="manifest" href="<?= e(url('manifest.php')) ?>">
     <link rel="icon" href="<?= e(url('assets/img/favicon.png')) ?>" type="image/png">
@@ -21,7 +24,7 @@ $logo = app() ? app()->settings->logoUrl() : '';
     <link rel="stylesheet" href="<?= e(asset('assets/css/app.css')) ?>">
     <style>:root{--brand: <?= e($settings['theme_color']) ?>}</style>
 </head>
-<body class="site-body <?= e($bodyClass ?? '') ?>">
+<body class="site-body has-tabbar <?= e($bodyClass ?? '') ?>">
     <div class="site-aurora" aria-hidden="true"></div>
 
     <header class="site-header">
@@ -47,6 +50,22 @@ $logo = app() ? app()->settings->logoUrl() : '';
                     <?= icon('lock', 16) ?><span>Admin</span>
                 </a>
             </nav>
+
+            <?php // Compact header action: only shown on phones, where the text nav is hidden. ?>
+            <div class="site-header__actions">
+                <?php if (current_access_payment()): ?>
+                    <a class="icon-btn" href="<?= e(url('success.php')) ?>" aria-label="My library">
+                        <?= icon('eye', 19) ?>
+                    </a>
+                <?php else: ?>
+                    <a class="icon-btn" href="<?= e(url('restore.php')) ?>" aria-label="Restore access">
+                        <?= icon('refresh', 19) ?>
+                    </a>
+                <?php endif; ?>
+                <a class="icon-btn" href="<?= e(url('admin/login.php')) ?>" aria-label="Admin panel">
+                    <?= icon('lock', 18) ?>
+                </a>
+            </div>
         </div>
     </header>
 
@@ -82,6 +101,56 @@ $logo = app() ? app()->settings->logoUrl() : '';
             </div>
         </div>
     </footer>
+
+    <?php
+    // App-style bottom navigation for phones (hidden from 761px upwards).
+    $script = basename(isset($_SERVER['SCRIPT_NAME']) ? (string) $_SERVER['SCRIPT_NAME'] : 'index.php');
+    $tabHome = $script === 'index.php' || $script === '' ;
+    $hasAccess = current_access_payment() !== null;
+    $tabs = [
+        [
+            'href'   => url(''),
+            'label'  => 'Home',
+            'icon'   => 'home',
+            'active' => $tabHome,
+            'anchor' => 'top',
+        ],
+        [
+            'href'   => url('') . '#library',
+            'label'  => 'Videos',
+            'icon'   => 'play',
+            'active' => false,
+            'anchor' => 'library',
+        ],
+        [
+            'href'   => url('') . '#bundles',
+            'label'  => 'Bundles',
+            'icon'   => 'tag',
+            'active' => false,
+            'anchor' => 'bundles',
+        ],
+        [
+            'href'   => $hasAccess ? url('success.php') : url('restore.php'),
+            'label'  => $hasAccess ? 'Library' : 'Restore',
+            'icon'   => $hasAccess ? 'eye' : 'refresh',
+            'active' => $hasAccess
+                ? in_array($script, ['success.php', 'locked.php'], true)
+                : in_array($script, ['restore.php', 'locked.php'], true),
+            'anchor' => '',
+        ],
+    ];
+    ?>
+    <nav class="tabbar" aria-label="Quick navigation" data-tabbar>
+        <?php foreach ($tabs as $tab): ?>
+            <a class="tabbar__item<?= $tab['active'] ? ' is-active' : '' ?>"
+               href="<?= e($tab['href']) ?>"
+               data-tab-anchor="<?= e($tab['anchor']) ?>"
+               <?= $tab['active'] ? 'aria-current="page"' : '' ?>>
+                <span class="tabbar__icon"><?= icon($tab['icon'], 20) ?></span>
+                <span class="tabbar__label"><?= e($tab['label']) ?></span>
+            </a>
+        <?php endforeach; ?>
+    </nav>
 
     <?php if (app()->settings->isRazorpayConfigured()): ?>
         <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>

@@ -6,7 +6,7 @@ $logo = app()->settings->logoUrl();
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Admin sign in · <?= e($settings['site_name']) ?></title>
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" href="<?= e(url('assets/img/favicon.png')) ?>" type="image/png">

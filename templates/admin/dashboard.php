@@ -185,7 +185,7 @@ $lifetimeDefault = (int) $settings['access_days'] === 0;
                 <tbody>
                     <?php foreach ($recent as $payment): ?>
                         <tr>
-                            <td>
+                            <td class="cell-main">
                                 <div class="person">
                                     <span class="avatar"><?= e(initials($payment['user_name'])) ?></span>
                                     <div>
@@ -194,10 +194,10 @@ $lifetimeDefault = (int) $settings['access_days'] === 0;
                                     </div>
                                 </div>
                             </td>
-                            <td class="strong"><?= e(money_exact($payment['amount'], $payment['currency'] ?? 'INR')) ?></td>
-                            <td><span class="badge badge--<?= e($payment['status']) ?>"><?= e(ucfirst($payment['status'])) ?></span></td>
-                            <td class="muted small"><?= e(date_display($payment['created_at'])) ?></td>
-                            <td class="right">
+                            <td data-label="Amount" class="strong"><?= e(money_exact($payment['amount'], $payment['currency'] ?? 'INR')) ?></td>
+                            <td data-label="Status"><span class="badge badge--<?= e($payment['status']) ?>"><?= e(ucfirst($payment['status'])) ?></span></td>
+                            <td data-label="Date" class="muted small"><?= e(date_display($payment['created_at'])) ?></td>
+                            <td class="right cell-actions">
                                 <a class="btn btn--ghost btn--xs" href="<?= e(url('admin/payment.php?id=' . (int) $payment['id'])) ?>">
                                     <?= icon('eye', 15) ?> View
                                 </a>

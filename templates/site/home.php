@@ -732,3 +732,19 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
         </div>
     </section>
 <?php endif; ?>
+
+<?php if ($hasProducts && !$selectedOwned): ?>
+    <?php // App-style action bar on phones: shows what will be charged and jumps to the form. ?>
+    <div class="buy-bar" data-buy-bar>
+        <div class="buy-bar__info">
+            <span class="buy-bar__label"><?= icon('tag', 12) ?> You are buying</span>
+            <span class="buy-bar__name" id="buy-bar-name"><?= e($selected['name']) ?></span>
+        </div>
+        <div class="buy-bar__side">
+            <span class="buy-bar__price" id="buy-bar-price"><?= e($priceLabel) ?></span>
+            <a class="btn btn--primary btn--sm" href="#checkout" data-buy-bar-jump>
+                Continue <?= icon('arrow-right', 15) ?>
+            </a>
+        </div>
+    </div>
+<?php endif; ?>

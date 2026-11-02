@@ -34,7 +34,7 @@ $currency = (string) $settings['currency'];
             <tbody>
                 <?php foreach ($videos as $video): ?>
                     <tr>
-                        <td>
+                        <td class="cell-main">
                             <div class="media-cell">
                                 <?php if ($video['thumbnail'] !== ''): ?>
                                     <img src="<?= e($video['thumbnail']) ?>" alt="" loading="lazy" width="96" height="54">
@@ -50,15 +50,15 @@ $currency = (string) $settings['currency'];
                                 </div>
                             </div>
                         </td>
-                        <td class="strong"><?= e(money((float) $video['price'], $currency)) ?></td>
-                        <td><?= (int) $video['bundles'] ?></td>
-                        <td><?= (int) $video['sales'] ?></td>
-                        <td>
+                        <td data-label="Price" class="strong"><?= e(money((float) $video['price'], $currency)) ?></td>
+                        <td data-label="In bundles"><?= (int) $video['bundles'] ?></td>
+                        <td data-label="Sold"><?= (int) $video['sales'] ?></td>
+                        <td data-label="Status">
                             <span class="badge <?= $video['is_active'] ? 'badge--success' : 'badge--muted' ?>">
                                 <?= $video['is_active'] ? 'On sale' : 'Hidden' ?>
                             </span>
                         </td>
-                        <td>
+                        <td class="cell-actions">
                             <div class="row-actions">
                                 <a class="btn btn--ghost btn--xs" href="<?= e(url('admin/video.php?id=' . (int) $video['id'])) ?>">
                                     <?= icon('sliders', 14) ?> Edit

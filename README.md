@@ -18,6 +18,7 @@ no build step, no Node.js required.
 5. [Uploading the logo (replaces the old "Logo URL" field)](#5-uploading-the-logo-replaces-the-old-logo-url-field)
 6. [Razorpay setup + webhooks](#6-razorpay-setup--webhooks)
 7. [How the money + access flow works](#7-how-the-money--access-flow-works) *(incl. videos, bundles, bundle savings, lifetime access)*
+7b. [Mobile layout (phone = app)](#7b-mobile-layout-phone--app)
 8. [Security model](#8-security-model)
 9. [File structure](#9-file-structure)
 10. [Database schema](#10-database-schema)
@@ -57,6 +58,11 @@ no build step, no Node.js required.
   the e-mail + mobile number used at checkout (rate limited).
 - **Demo mode**: test the complete payment flow with no Razorpay account and no money.
 - Installable PWA (dynamic manifest, offline fallback page, service worker).
+- **Mobile app experience** on phones (≤ 760 px): compact sticky header, a fixed bottom
+  tab bar (Home · Videos · Bundles · Library), a floating *"you are buying"* bar that
+  follows the selection and hides when the checkout is on screen, full-width cards,
+  44 px+ tap targets, safe-area padding for notched phones and 16 px inputs so iOS never
+  zooms into the form.
 
 **Admin panel** (`/admin/`)
 
@@ -289,6 +295,53 @@ existing lifetime purchases are never shortened by changing the setting.
 - Every step is written to `payment_events` and shown in the admin timeline.
 
 ---
+
+## 7b. Mobile layout (phone = app)
+
+Everything is one stylesheet (`assets/css/app.css`). The phone layer lives at the end of
+the file under **“MOBILE APP LAYER”** and is only active below 761 px, so the desktop
+design is untouched.
+
+| Breakpoint | What changes |
+|---|---|
+| `> 1000px` | Full desktop layout: text nav, 264 px pinned admin sidebar, 4-up stat grid. |
+| `761–1000px` | Single-column content; admin sidebar becomes an overlay drawer opened by a burger. |
+| `≤ 760px` | App shell: bottom tab bar, header icon shortcuts, floating action bar, card tables, stacked forms. |
+| `≤ 380px` | Small-phone tier: tighter gutters, single-column library, smaller price type. |
+| landscape ≤ 480px tall | Tab bar shrinks, action bar hides, header gets shorter. |
+
+**Public site**
+
+- Header keeps the logo and two icon shortcuts (library/restore + admin); the text nav is
+  replaced by the **bottom tab bar**: Home · Videos · Bundles · Library (or Restore).
+  The active tab follows the section in view (a small scroll spy in `app.js`).
+- A floating **action bar** above the tab bar shows the selected product and its price.
+  It stays in sync when the visitor taps any *Buy* button and slides away once the real
+  checkout form is on screen, so the price is never more than a glance away.
+- Hero, stats, bundles, videos, checkout, FAQ and the library all become full-width
+  stacked blocks; the hero stats turn into a 2-column tile grid.
+- The buyer library shows a 16:9 player followed by a 2-up video shelf and the receipt.
+
+**Admin panel**
+
+- Five-tab bottom bar (**Dashboard · Videos · Bundles · Payments · More**); *More* opens
+  the full drawer. Sub-screens highlight their section (video editor → Videos, bundle
+  editor → Bundles, payment view → Payments).
+- Every data table turns into **one card per row**: the first cell is the card header,
+  the rest are label/value rows (`<td data-label="Amount">`), and actions become
+  full-width buttons at the bottom of the card.
+- Filters become a two-column grid with a full-width *Filter* button; the save bar sticks
+  to the bottom above the tab bar so *Save* is always reachable; forms are single column
+  with 16 px inputs.
+
+**Safety details**
+
+- `viewport-fit=cover` + `env(safe-area-inset-*)` keep the tab bar and drawer clear of the
+  notch and home indicator.
+- `overflow-x: clip` on the phone body, `word-break` on monospace IDs and ellipsis on the
+  action-bar title prevent accidental sideways scrolling.
+- `apple-mobile-web-app-capable` + the existing `manifest.php` (`display: standalone`,
+  portrait) mean “Add to home screen” opens without browser chrome.
 
 ## 8. Security model
 
@@ -596,47 +649,53 @@ Because payments touch money, verify these after any change:
 
 1. **Storefront** — logo; then **bundle cards first** (thumbnail strip of the videos,
    name, contents, saving), then every video card (image + own price) — both *above* the
-   checkout form; how it works and the FAQ only after the form; hero stats; mobile layout
-   (375 px) with the thumbnails still side by side; demo-mode banner.
-2. **Purchased state** — buy a bundle, then reopen the storefront: the bundle card says
+   checkout form; how it works and the FAQ only after the form; hero stats; demo-mode banner.
+2. **Phone (360 / 390 / 430 px)** — bottom tab bar with one active tab; tapping *Videos*
+   and *Bundles* scrolls and re-highlights the tab; the floating action bar shows the
+   selected product + price, updates when another card is chosen, and disappears at the
+   checkout; no sideways scrolling anywhere; inputs do not zoom the page on iOS.
+3. **Admin on a phone** — five-tab bottom bar; *More* opens the drawer and the ✕ closes it;
+   payments/videos tables read as labelled cards with full-width action buttons; the save
+   bar stays above the tab bar while editing a video, bundle or setting.
+4. **Purchased state** — buy a bundle, then reopen the storefront: the bundle card says
    *Purchased* (and *Saved ₹99*), every video inside it says *Owned* with a **Watch** button,
    and `?buy=video:1` / `?buy=bundle:1` show the "You already own this" panel with no pay
    form. Buy one single video only → that card is *Owned*, the bundle still offers
    *Choose this bundle*, and the other video still sells normally.
-3. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle: the checkout
+5. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle: the checkout
    box names the bundle, shows the per-video price, the total if bought separately and the
    saving — and the pay button still shows the single-video price. Click *Choose the bundle
    instead* → the box switches to the bundle and the pay button updates; click the single
    video again → it switches back. Nothing is chosen automatically.
-4. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
-5. **Product switch** — click *Buy video* on two different cards → the pay card and
+6. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
+7. **Product switch** — click *Buy video* on two different cards → the pay card and
    `?buy=` URL update; reload the URL → the same product is preselected.
-6. **Payment (test keys)** — successful payment → redirect to the library → the bought
+8. **Payment (test keys)** — successful payment → redirect to the library → the bought
    video plays; a bundle shows every video in it.
-7. **Price tampering** — change `data-amount-paise`/the hidden `item_id` in DevTools → the
+9. **Price tampering** — change `data-amount-paise`/the hidden `item_id` in DevTools → the
    order is still created for the database price of the re-read product (check Razorpay
    dashboard / `payments.amount`).
-8. **Other videos stay locked** — a buyer of video 1 cannot open video 2 (their library
+10. **Other videos stay locked** — a buyer of video 1 cannot open video 2 (their library
    lists only what they paid for).
-9. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
-10. **Locked page** — open `/success.php` in a private window → the library is locked.
-11. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
+11. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
+12. **Locked page** — open `/success.php` in a private window → the library is locked.
+13. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
    access restored; wrong mobile → generic error; 7 attempts → rate-limit message.
-12. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
+14. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
     the admin payment page says "Lifetime access", and the CSV shows `Lifetime`.
-13. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
-14. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
+15. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
+16. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
     library of whoever bought it), delete a sold video → it is hidden, not erased.
-15. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
+17. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
     savings message), save, buy it, then remove a video from the bundle → the earlier buyer
     still sees it.
-16. **Filters** — search by partial e-mail and by **product name**, filter by status and date
+18. **Filters** — search by partial e-mail and by **product name**, filter by status and date
     range, sort each column, paginate, export CSV and open it in Excel.
-17. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
+19. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
    `.php` renamed to `.png` is rejected; 3 MB file is rejected; remove checkbox restores the mark.
-18. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
-19. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
-20. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
+20. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
+21. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
+22. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
     required", open `update.php` → items listed → Run the update → old payment still visible in
     *Admin → Payments*, old logo still shown, the old YouTube link became a priced video in
     *Admin → Videos*, old successful payments list that video under **Unlocked videos** →

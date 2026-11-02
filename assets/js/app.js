@@ -227,6 +227,12 @@
         if (periodNode) { periodNode.textContent = period ? '/ ' + period : ''; }
         if (buttonLabel) { buttonLabel.textContent = 'Pay ' + label + ' & unlock'; }
 
+        // Keep the phone action bar in step with what will be charged.
+        const barName = document.getElementById('buy-bar-name');
+        const barPrice = document.getElementById('buy-bar-price');
+        if (barName) { barName.textContent = name; }
+        if (barPrice) { barPrice.textContent = label; }
+
         const key = type + ':' + id;
         document.querySelectorAll('[data-product-card]').forEach(function (card) {
             card.classList.toggle('is-selected', card.getAttribute('data-product-card') === key);
@@ -250,6 +256,63 @@
             window.setTimeout(function () { nameField.focus({ preventScroll: true }); }, 350);
         }
     }
+
+    /* --------------------------------------------------------------------- */
+    /* Mobile chrome: bottom tab bar + "you are buying" action bar            */
+    /* --------------------------------------------------------------------- */
+    function initMobileChrome() {
+        // Hide the action bar once the real checkout form is on screen.
+        const buyBar = document.querySelector('[data-buy-bar]');
+        const checkout = document.getElementById('checkout');
+        if (buyBar) {
+            // Reserve room so the floating bar never covers the last section.
+            document.body.classList.add('has-buy-bar');
+        }
+        if (buyBar && checkout && 'IntersectionObserver' in window) {
+            new IntersectionObserver(function (entries) {
+                buyBar.hidden = entries[0].isIntersecting;
+            }, { rootMargin: '-64px 0px -35% 0px' }).observe(checkout);
+        }
+
+        // Highlight the tab for the section in view (storefront only).
+        const tabbar = document.querySelector('[data-tabbar]');
+        if (!tabbar) { return; }
+        const items = Array.prototype.slice.call(tabbar.querySelectorAll('[data-tab-anchor]'));
+        const sections = [];
+        items.forEach(function (item) {
+            const node = document.getElementById(item.getAttribute('data-tab-anchor') || '');
+            if (node) { sections.push(node); }
+        });
+        if (!sections.length) { return; }
+
+        function highlight(anchor) {
+            items.forEach(function (item) {
+                const on = item.getAttribute('data-tab-anchor') === anchor;
+                item.classList.toggle('is-active', on);
+                if (on) {
+                    item.setAttribute('aria-current', 'true');
+                } else {
+                    item.removeAttribute('aria-current');
+                }
+            });
+        }
+
+        let frame = 0;
+        function update() {
+            frame = 0;
+            let current = 'top';
+            sections.forEach(function (section) {
+                if (section.getBoundingClientRect().top <= 140) { current = section.id; }
+            });
+            highlight(current);
+        }
+        window.addEventListener('scroll', function () {
+            if (!frame) { frame = window.requestAnimationFrame(update); }
+        }, { passive: true });
+        update();
+    }
+
+    initMobileChrome();
 
     document.addEventListener('click', function (event) {
         const trigger = event.target.closest('[data-buy]');

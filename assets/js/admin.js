@@ -2,15 +2,20 @@
 (function () {
     'use strict';
 
-    /* Sidebar (mobile) ------------------------------------------------------ */
+    /* Sidebar drawer (phones + tablets) ------------------------------------- */
     const sidebar = document.getElementById('admin-sidebar');
-    const overlay = document.querySelector('[data-sidebar-close]');
+    const overlays = Array.prototype.slice.call(document.querySelectorAll('[data-sidebar-close]'));
+    const overlay = document.querySelector('.admin-overlay');
+    const toggles = Array.prototype.slice.call(document.querySelectorAll('[data-sidebar-toggle]'));
 
     function openSidebar() {
         if (!sidebar) { return; }
         sidebar.classList.add('is-open');
         if (overlay) { overlay.hidden = false; }
         document.body.style.overflow = 'hidden';
+        toggles.forEach(function (button) { button.setAttribute('aria-expanded', 'true'); });
+        const first = sidebar.querySelector('a, button');
+        if (first) { first.focus({ preventScroll: true }); }
     }
 
     function closeSidebar() {
@@ -18,16 +23,24 @@
         sidebar.classList.remove('is-open');
         if (overlay) { overlay.hidden = true; }
         document.body.style.overflow = '';
+        toggles.forEach(function (button) { button.setAttribute('aria-expanded', 'false'); });
     }
 
-    const burger = document.querySelector('[data-sidebar-toggle]');
-    if (burger) {
-        burger.addEventListener('click', function () {
+    toggles.forEach(function (button) {
+        button.setAttribute('aria-expanded', 'false');
+        button.addEventListener('click', function () {
             sidebar && sidebar.classList.contains('is-open') ? closeSidebar() : openSidebar();
         });
-    }
-    if (overlay) {
-        overlay.addEventListener('click', closeSidebar);
+    });
+    overlays.forEach(function (node) {
+        node.addEventListener('click', closeSidebar);
+    });
+    // Tapping a destination in the drawer navigates — close it first so the
+    // page behind is not left with a locked scroll when the user comes back.
+    if (sidebar) {
+        sidebar.querySelectorAll('a[href]').forEach(function (link) {
+            link.addEventListener('click', closeSidebar);
+        });
     }
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') { closeSidebar(); }

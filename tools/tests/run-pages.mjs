@@ -46,6 +46,9 @@ seed_bundle($db);
         'value="video"', 'value="1"', 'Save ', 'data-buy',
         'data-price="19900"', 'data-price="39900"',
         'Start here · Bundles', 'Or buy a single video', 'Checkout', 'hero__stats',
+        // mobile app shell
+        'data-tabbar', 'tabbar__item is-active', 'data-buy-bar', 'id="buy-bar-price"',
+        'class="site-body has-tabbar',
     ],
     hasNot: ['Bonus — Behind the Scenes', 'Fatal error', 'Warning:', 'Notice:'],
     order: [
@@ -196,6 +199,7 @@ $_SESSION['access_token'] = '${TOKEN}';
     hasNot: [
         'id="payment-form"', 'name="item_type"', 'Pay ₹',
         'Choose this bundle', 'id="save-hint"',
+        'data-buy-bar',
         'Fatal error', 'Warning:', 'Notice:',
     ],
 });
@@ -263,6 +267,7 @@ $db->tables['payments'][0]['access_token'] = '${TOKEN}';
         'does not expire', 'id="player"',
         'youtube-nocookie.com/embed/aaaaaaaaaaa', 'library__item',
         'Copy my private access link',
+        'data-tabbar', 'tabbar__label">Library',
     ],
     hasNot: ['Fatal error', 'Warning:', 'day(s)'],
 }, { query: `?t=${TOKEN}`, get: { t: TOKEN } });
@@ -383,7 +388,12 @@ seed_bundle($db);
 seed_payment($db);
 seed_payment($db, ['order_id' => 'order_B', 'payment_id' => 'pay_B', 'status' => 'pending', 'product_type' => 'video', 'product_id' => 1, 'product_name' => 'Episode One — The Beginning', 'user_name' => 'Ravi Kumar', 'user_email' => 'ravi@example.com', 'access_expires_at' => null, 'paid_at' => null], []);
 `, 'admin/payments.php', {
-    has: ['Season One — Complete', 'Episode One — The Beginning', 'Bundle', 'Video', 'Asha Verma', 'Ravi Kumar'],
+    has: [
+        'Season One — Complete', 'Episode One — The Beginning', 'Bundle', 'Video', 'Asha Verma', 'Ravi Kumar',
+        // phone layout: bottom bar, drawer close button and labelled card cells
+        'data-admin-tabbar', 'admin-tabbar__item is-active', 'sidebar__close',
+        'data-label="Product"', 'data-label="Amount"', 'data-label="Status"', 'cell-main',
+    ],
     hasNot: ['Fatal error', 'Warning:'],
 }, { login: true });
 

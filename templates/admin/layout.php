@@ -4,6 +4,15 @@
 /** @var string                    $content */
 $current = isset($activeNav) && $activeNav !== '' ? (string) $activeNav : basename(isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : 'index.php');
 $logo = app()->settings->logoUrl();
+
+// Sub-screens highlight their section in the sidebar and the phone tab bar.
+$sections = [
+    'video.php'    => 'videos.php',
+    'bundle.php'   => 'bundles.php',
+    'payment.php'  => 'payments.php',
+    'password.php' => 'admins.php',
+];
+$activeFile = isset($sections[$current]) ? $sections[$current] : $current;
 $nav = [
     ['file' => 'index.php',    'label' => 'Dashboard',    'icon' => 'grid'],
     ['file' => 'videos.php',   'label' => 'Videos',       'icon' => 'youtube'],
@@ -17,18 +26,21 @@ $nav = [
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <title><?= e($pageTitle) ?> · <?= e($settings['site_name']) ?> Admin</title>
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" href="<?= e(url('assets/img/favicon.png')) ?>" type="image/png">
     <link rel="stylesheet" href="<?= e(asset('assets/css/app.css')) ?>">
     <style>:root{--brand: <?= e($settings['theme_color']) ?>}</style>
 </head>
-<body class="admin-body">
+<body class="admin-body has-tabbar">
 <div class="admin-shell">
     <div class="admin-overlay" data-sidebar-close hidden></div>
 
     <aside class="sidebar" id="admin-sidebar">
+        <button type="button" class="sidebar__close" data-sidebar-close aria-label="Close menu">
+            <?= icon('x', 18) ?>
+        </button>
         <div class="sidebar__brand">
             <?php if ($logo !== ''): ?>
                 <img src="<?= e($logo) ?>" alt="<?= e($settings['logo_text']) ?>" class="sidebar__logo">
@@ -43,7 +55,7 @@ $nav = [
 
         <nav class="sidebar__nav" aria-label="Admin navigation">
             <?php foreach ($nav as $item): ?>
-                <a class="sidebar__link <?= $current === $item['file'] ? 'is-active' : '' ?>"
+                <a class="sidebar__link <?= $activeFile === $item['file'] ? 'is-active' : '' ?>"
                    href="<?= e(url('admin/' . $item['file'])) ?>">
                     <?= icon($item['icon'], 18) ?>
                     <span><?= e($item['label']) ?></span>
@@ -78,6 +90,30 @@ $nav = [
             <p class="sidebar__version">v<?= e(APP_VERSION) ?></p>
         </div>
     </aside>
+
+    <?php
+    // App-style bottom navigation for phones: the five daily destinations plus
+    // "More", which opens the full sidebar drawer.
+    $adminTabs = array_slice($nav, 0, 4);
+    $tabFiles = array_map(function ($item) {
+        return $item['file'];
+    }, $adminTabs);
+    $moreActive = !in_array($activeFile, $tabFiles, true);
+    ?>
+    <nav class="admin-tabbar" aria-label="Admin quick navigation" data-admin-tabbar>
+        <?php foreach ($adminTabs as $item): ?>
+            <a class="admin-tabbar__item <?= $activeFile === $item['file'] ? 'is-active' : '' ?>"
+               href="<?= e(url('admin/' . $item['file'])) ?>"
+               <?= $activeFile === $item['file'] ? 'aria-current="page"' : '' ?>>
+                <span class="admin-tabbar__icon"><?= icon($item['icon'], 19) ?></span>
+                <span class="admin-tabbar__label"><?= e($item['label'] === 'Site settings' ? 'Settings' : $item['label']) ?></span>
+            </a>
+        <?php endforeach; ?>
+        <button type="button" class="admin-tabbar__item admin-tabbar__more <?= $moreActive ? 'is-active' : '' ?>" data-sidebar-toggle aria-controls="admin-sidebar" aria-label="More admin sections" aria-expanded="false">
+            <span class="admin-tabbar__icon"><?= icon('more', 19) ?></span>
+            <span class="admin-tabbar__label">More</span>
+        </button>
+    </nav>
 
     <div class="admin-main">
         <header class="topbar">

@@ -395,7 +395,7 @@ $csrfToken = $_SESSION['install_csrf'];
 function installer_head($title)
 {
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
-        . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">'
         . '<meta name="robots" content="noindex,nofollow">'
         . '<title>' . e($title) . '</title><style>'
         . ':root{color-scheme:dark}*{box-sizing:border-box}'
@@ -409,6 +409,9 @@ function installer_head($title)
         . 'p{margin:0 0 12px;color:#a9b8ce}a{color:#a5b4fc}'
         . '.grid{display:grid;grid-template-columns:1fr 1fr;gap:26px}'
         . '@media(max-width:820px){.grid{grid-template-columns:1fr}}'
+        . '@media(max-width:560px){body{padding:18px 12px}.card{padding:16px;border-radius:16px}'
+        . 'h1{font-size:1.32rem}.row,.row3{grid-template-columns:1fr}input{font-size:16px;min-height:46px}'
+        . '.btn{min-height:48px}.actions a{min-width:0;width:100%}table{font-size:.8rem}}'
         . 'ul.checks{list-style:none;padding:0;margin:0;display:grid;gap:8px}'
         . 'ul.checks li{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;padding:9px 12px;border-radius:10px;'
         . 'border:1px solid rgba(148,163,184,.16);background:rgba(148,163,184,.05)}'

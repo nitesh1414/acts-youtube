@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>You are offline</title>
     <meta name="theme-color" content="#0b1120">
     <style>
@@ -14,7 +14,7 @@
             background: radial-gradient(circle at 20% 10%, #1e293b, #070b14 60%); color: #e2e8f0;
         }
         .card {
-            max-width: 460px; text-align: center; padding: 40px 32px; border-radius: 22px;
+            width: 100%; max-width: 460px; text-align: center; padding: 40px 32px; border-radius: 22px;
             background: rgba(15, 23, 42, .82); border: 1px solid rgba(148, 163, 184, .18);
             box-shadow: 0 30px 80px rgba(0, 0, 0, .45);
         }
@@ -29,6 +29,11 @@
             font-weight: 600; font-size: .98rem; color: #fff;
             background: linear-gradient(135deg, #6366f1, #8b5cf6);
             box-shadow: 0 10px 24px rgba(99, 102, 241, .35);
+        }
+        @media (max-width: 420px) {
+            body { padding: 16px; }
+            .card { padding: 28px 20px; border-radius: 18px; }
+            h1 { font-size: 1.25rem; }
         }
     </style>
 </head>

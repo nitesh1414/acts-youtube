@@ -10,7 +10,7 @@ Node.
 
 ```bash
 cd tools/tests
-npm install          # installs php-wasm (nothing else)
+npm install          # php-wasm (runs the PHP) + css-tree (parses the stylesheet)
 ```
 
 ## Commands
@@ -22,10 +22,12 @@ npm install          # installs php-wasm (nothing else)
 | `node run-db.mjs` | Library logic: pricing, bundles and savings, entitlements, lifetime vs. limited access, payment search/export, and the "price always comes from the database" guarantees. |
 | `node run-pages.mjs` | Boots the real entry scripts (`index.php`, `success.php`, `admin/*.php`) against the fake DB and asserts on the rendered HTML — including **section order** and the bundle-savings nudge. Writes `out/<scenario>.html`. |
 | `node check-html.mjs` | On the pages in `out/`: no leaked PHP, balanced tags, and every CSS class exists in `assets/css/app.css` or the JS. |
+| `node check-mobile.mjs` | Mobile/app-shell audit: the stylesheet parses and every declaration is valid, the phone rules actually win at 390 px and lose at 1280 px (a small cascade resolver), every page carries the device viewport + safe areas, the site has a 4-tab bottom bar and the admin a 5-tab one, and every admin table cell has the `data-label` its card layout needs. |
 | `node run-tools.mjs` | Runs `php tools/build-schema.php` and copies the regenerated `sql/schema.sql` back. |
-| `node preview.mjs` | Renders `home`, video/bundle checkout states, the buyer library and two admin screens to `preview/*.html` with the CSS inlined, for a quick visual check. |
+| `node preview.mjs` | Renders `home`, the bundle/video checkout states, the owned state, the buyer library, six admin screens and the sign-in page to `preview/*.html` with the CSS inlined, for a quick visual check. |
+| `node preview-mobile.mjs` | Builds `preview/mobile.html`: every screen inside a 390 × 844 phone frame (`<iframe srcdoc>`), so the phone layout can be reviewed in a desktop browser without a device. |
 
-`npm run all` runs lint → schema → db → pages → html.
+`npm run all` runs lint → schema → db → pages → html → mobile.
 
 Add a repository path as the last argument to point at another checkout, e.g.
 `node run-pages.mjs /var/www/payaccess`.

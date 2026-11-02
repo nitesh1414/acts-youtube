@@ -108,7 +108,7 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                 <tbody>
                     <?php foreach ($rows as $payment): ?>
                         <tr>
-                            <td>
+                            <td class="cell-main">
                                 <div class="person">
                                     <span class="avatar"><?= e(initials($payment['user_name'])) ?></span>
                                     <div>
@@ -117,7 +117,7 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Product">
                                 <?php
                                 $productName = isset($payment['product_name']) && $payment['product_name'] !== ''
                                     ? (string) $payment['product_name']
@@ -129,15 +129,15 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                                     <span class="badge badge--muted tiny"><?= $type === 'bundle' ? 'Bundle' : ($type === 'video' ? 'Video' : 'Legacy') ?></span>
                                 </span>
                             </td>
-                            <td class="mono small"><?= e(display_mobile($payment['user_mobile'])) ?></td>
-                            <td class="strong"><?= e(money_exact($payment['amount'], $payment['currency'] ?? 'INR')) ?></td>
-                            <td><span class="badge badge--<?= e($payment['status']) ?>"><?= e(ucfirst($payment['status'])) ?></span></td>
-                            <td class="mono tiny muted">
+                            <td data-label="Mobile" class="mono small"><?= e(display_mobile($payment['user_mobile'])) ?></td>
+                            <td data-label="Amount" class="strong"><?= e(money_exact($payment['amount'], $payment['currency'] ?? 'INR')) ?></td>
+                            <td data-label="Status"><span class="badge badge--<?= e($payment['status']) ?>"><?= e(ucfirst($payment['status'])) ?></span></td>
+                            <td data-label="Razorpay IDs" class="mono tiny muted">
                                 <?= e(!empty($payment['order_id']) ? $payment['order_id'] : '—') ?><br>
                                 <?= e(!empty($payment['payment_id']) ? $payment['payment_id'] : '') ?>
                             </td>
-                            <td class="muted small"><?= e(date_display($payment['created_at'])) ?></td>
-                            <td class="right">
+                            <td data-label="Date" class="muted small"><?= e(date_display($payment['created_at'])) ?></td>
+                            <td class="right cell-actions">
                                 <a class="btn btn--ghost btn--xs" href="<?= e(url('admin/payment.php?id=' . (int) $payment['id'])) ?>">
                                     <?= icon('eye', 15) ?> View
                                 </a>

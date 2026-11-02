@@ -79,4 +79,15 @@ await render('library', library, 'success.php', { t: TOKEN });
 await render('admin-videos', shop + 'seed_payment($db); fake_login();', 'admin/videos.php');
 await render('admin-bundles', 'seed_videos($db); seed_bundle($db); fake_login();', 'admin/bundles.php');
 
+const adminShop = shop + `
+seed_payment($db, ['order_id' => 'order_A', 'payment_id' => 'pay_A'], [1]);
+seed_payment($db, ['order_id' => 'order_B', 'payment_id' => 'pay_B', 'product_type' => 'video',
+    'product_id' => 2, 'product_name' => 'Episode Two — The Return', 'amount' => '299.00',
+    'status' => 'pending'], []);
+fake_login();`;
+await render('admin-dashboard', adminShop, 'admin/index.php');
+await render('admin-payments', adminShop, 'admin/payments.php');
+await render('admin-settings', shop + 'fake_login();', 'admin/settings.php');
+await render('login', 'seed_videos($db); seed_bundle($db);', 'admin/login.php');
+
 console.log('\nOpen ' + path.join(outDir, 'home.html'));

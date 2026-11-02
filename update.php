@@ -258,7 +258,7 @@ $environment = [
 function update_head($title)
 {
     echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
-        . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        . '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">'
         . '<meta name="robots" content="noindex,nofollow">'
         . '<title>' . e($title) . '</title><style>'
         . ':root{color-scheme:dark}*{box-sizing:border-box}'
@@ -292,7 +292,8 @@ function update_head($title)
         . 'background:rgba(4,9,20,.6);color:#e8eefb;font:inherit;font-size:.92rem}'
         . 'input:focus{outline:none;border-color:#818cf8;box-shadow:0 0 0 3px rgba(99,102,241,.2)}'
         . '.field{margin-bottom:14px}.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}'
-        . '@media(max-width:640px){.row{grid-template-columns:1fr}}'
+        . '@media(max-width:640px){.row,.row3{grid-template-columns:1fr}body{padding:18px 12px}'
+        . '.card{padding:16px;border-radius:16px}h1{font-size:1.3rem}input{font-size:16px;min-height:46px}}'
         . '.muted{color:#7f93b3;font-size:.82rem}'
         . '</style></head><body><div class="wrap"><div class="brand"><span>▶</span> PayAccess database update</div>';
 }

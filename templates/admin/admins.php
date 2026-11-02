@@ -26,7 +26,7 @@
                 <tbody>
                     <?php foreach ($admins as $row): ?>
                         <tr>
-                            <td>
+                            <td class="cell-main">
                                 <div class="person">
                                     <span class="avatar"><?= e(initials($row['name'])) ?></span>
                                     <div>
@@ -35,14 +35,14 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="mono small">@<?= e($row['username']) ?></td>
-                            <td>
+                            <td data-label="Username" class="mono small">@<?= e($row['username']) ?></td>
+                            <td data-label="Status">
                                 <span class="badge <?= (int) $row['is_active'] ? 'badge--success' : 'badge--muted' ?>">
                                     <?= (int) $row['is_active'] ? 'Active' : 'Disabled' ?>
                                 </span>
                             </td>
-                            <td class="muted small"><?= e(date_display($row['last_login_at'], 'Never')) ?></td>
-                            <td class="right">
+                            <td data-label="Last sign-in" class="muted small"><?= e(date_display($row['last_login_at'], 'Never')) ?></td>
+                            <td class="right cell-actions">
                                 <div class="row-actions">
                                     <form method="post" class="inline-form">
                                         <?= csrf_field() ?>
