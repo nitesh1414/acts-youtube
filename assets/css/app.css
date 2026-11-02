@@ -1097,7 +1097,8 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .admin-tabbar,
 .buy-bar,
 .site-header__actions,
-.sidebar__close { display: none; }
+.sidebar__close,
+.pick-prompt { display: none; }
 
 /* Touch behaviour: no sticky hover states, no 300ms delays, no text inflation. */
 @media (hover: none) {
@@ -1210,6 +1211,21 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
     .buy-bar__side { display: inline-flex; align-items: center; gap: 8px; flex: none; }
     .buy-bar__price { font-size: 1rem; font-weight: 800; letter-spacing: -.02em; }
     .buy-bar .btn { min-height: 40px; padding: 8px 12px; font-size: .84rem; }
+
+    /* ---------- nothing is being bought before a choice ------------------- */
+    /* Until a card is tapped the phone shows a prompt, never a checkout with
+       somebody else's default pick and a "You are buying" label. */
+    .no-pick .paycard { display: none; }
+    /* The "Complete your purchase" heading would be a lie before a choice. */
+    .no-pick #checkout .section__head { display: none; }
+    .no-pick .pick-prompt {
+        display: grid; justify-items: start; gap: 4px;
+        border: 1px dashed rgba(139, 92, 246, .45);
+        background: rgba(99, 102, 241, .08);
+    }
+    .pick-prompt h3 { margin: 2px 0 0; font-size: 1.05rem; }
+    .pick-prompt p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; }
+    .pick-prompt svg { color: #c7d2fe; }
 
     /* ---------- home / storefront --------------------------------------- */
     .hero { padding: 24px 0 14px; }

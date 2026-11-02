@@ -11,7 +11,7 @@ $lifetime = $daysLeft === null;
 $isBundle = isset($payment['product_type']) && $payment['product_type'] === 'bundle';
 $productName = isset($payment['product_name']) && $payment['product_name'] !== ''
     ? (string) $payment['product_name']
-    : 'Legacy single video';
+    : 'No product recorded';
 ?>
 <a class="link small back-link" href="<?= e(url('admin/payments.php')) ?>"><?= icon('arrow-left', 15) ?> All payments</a>
 
@@ -53,7 +53,7 @@ $productName = isset($payment['product_name']) && $payment['product_name'] !== '
             <div><dt>Product</dt>
                 <dd>
                     <strong><?= e($productName) ?></strong>
-                    <span class="badge badge--muted tiny"><?= $isBundle ? 'Bundle' : ($payment['product_type'] === 'video' ? 'Single video' : 'Legacy') ?></span>
+                    <span class="badge badge--muted tiny"><?= $isBundle ? 'Bundle' : ($payment['product_type'] === 'video' ? 'Single video' : 'Untracked') ?></span>
                 </dd>
             </div>
             <?php if (!empty($payment['product_id'])): ?>
@@ -129,7 +129,8 @@ $productName = isset($payment['product_name']) && $payment['product_name'] !== '
     <?php if (empty($videos)): ?>
         <p class="muted small">
             <?php if ($payment['status'] === 'success'): ?>
-                This purchase has no linked videos (it may be a legacy single-video order whose link lives on the Site settings page).
+                This purchase has no linked videos. It was probably made before the library existed —
+                add the videos it should unlock below.
             <?php else: ?>
                 Videos are attached to this payment once it succeeds.
             <?php endif; ?>

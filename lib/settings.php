@@ -10,12 +10,10 @@ final class Settings
         'logo_path'              => '',
         'logo_text'              => 'PayAccess',
         'tagline'                => 'Get instant access to our video library',
-        'amount'                 => '199.00',
         'currency'               => 'INR',
         'razorpay_key_id'        => '',
         'razorpay_key_secret'    => '',
         'razorpay_webhook_secret'=> '',
-        'youtube_video_url'      => '',
         'youtube_channel_url'    => '',
         'support_email'          => '',
         'support_phone'          => '',
@@ -61,10 +59,14 @@ final class Settings
             }
         }
 
+        // The old fallback price + single-video link are gone: every product now
+        // carries its own price. Old databases keep the columns (harmless data)
+        // but nothing reads them any more.
+        unset($settings['amount'], $settings['youtube_video_url']);
+
         // 0 = access never expires. Negative values are meaningless.
         $settings['access_days'] = max(0, (int) $settings['access_days']);
         $settings['demo_mode'] = (int) $settings['demo_mode'] === 1 ? 1 : 0;
-        $settings['amount'] = number_format((float) $settings['amount'], 2, '.', '');
         $settings['logo_path'] = (string) $settings['logo_path'];
         $settings['logo_text'] = trim((string) $settings['logo_text']) !== '' ? trim((string) $settings['logo_text']) : (string) $settings['site_name'];
         if (!preg_match('/^#[0-9a-f]{6}$/i', (string) $settings['theme_color'])) {
@@ -146,11 +148,6 @@ final class Settings
         return trim((string) $all['razorpay_key_id']) !== '' && trim((string) $all['razorpay_key_secret']) !== '';
     }
 
-    public function amount()
-    {
-        return (float) $this->all()['amount'];
-    }
-
     public function currency()
     {
         $currency = strtoupper((string) $this->all()['currency']);
@@ -200,26 +197,9 @@ final class Settings
             $errors['tagline'] = 'Tagline can be at most 190 characters.';
         }
 
-        $amountRaw = $value('amount', $current['amount']);
-        if (!is_numeric($amountRaw)) {
-            $errors['amount'] = 'Enter a valid amount.';
-        } else {
-            $amount = round((float) $amountRaw, 2);
-            if ($amount < 1) {
-                $errors['amount'] = 'The amount must be at least 1.';
-            } elseif ($amount > 500000) {
-                $errors['amount'] = 'The amount cannot exceed 5,00,000.';
-            }
-        }
-
         $accessDaysRaw = $value('access_days', (string) $current['access_days']);
         if (!ctype_digit($accessDaysRaw) || (int) $accessDaysRaw > 3650) {
             $errors['access_days'] = 'Access duration must be 0 (forever) or a number of days up to 3650.';
-        }
-
-        $youtubeVideo = $value('youtube_video_url');
-        if ($youtubeVideo !== '' && youtube_id($youtubeVideo) === null) {
-            $errors['youtube_video_url'] = 'Enter a valid YouTube video link (e.g. https://www.youtube.com/watch?v=VIDEO_ID).';
         }
 
         $channelUrl = $value('youtube_channel_url');
@@ -261,9 +241,7 @@ final class Settings
             'site_name'               => db_limit($siteName, 120),
             'logo_text'               => db_limit($logoText !== '' ? $logoText : $siteName, 120),
             'tagline'                 => db_limit($tagline, 190),
-            'amount'                  => isset($amount) ? number_format($amount, 2, '.', '') : number_format((float) $current['amount'], 2, '.', ''),
             'access_days'             => isset($accessDaysRaw) && ctype_digit($accessDaysRaw) ? (int) $accessDaysRaw : (int) $current['access_days'],
-            'youtube_video_url'       => db_limit($youtubeVideo, 255),
             'youtube_channel_url'     => db_limit($channelUrl, 255),
             'support_email'           => db_limit($supportEmail, 190),
             'support_phone'           => db_limit($supportPhone, 30),

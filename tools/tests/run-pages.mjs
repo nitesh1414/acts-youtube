@@ -49,6 +49,8 @@ seed_bundle($db);
         // mobile app shell
         'data-tabbar', 'tabbar__item is-active', 'data-buy-bar', 'id="buy-bar-price"',
         'class="site-body has-tabbar',
+        // ...but nothing is being bought until a card is tapped
+        'no-pick', '<div class="buy-bar" data-buy-bar hidden>', 'id="pick-prompt"',
         // e-mail is optional, name + mobile are not
         'Email address <span class="field__optional">optional</span>',
         'placeholder="you@example.com (not required)"',
@@ -94,8 +96,10 @@ seed_bundle($db);
         'id="item-id" value="2"',
         'data-amount-paise="29900"',
         'value="video"',
+        // an explicit pick shows the action bar straight away
+        '<div class="buy-bar" data-buy-bar>',
     ],
-    hasNot: ['Fatal error', 'Warning:'],
+    hasNot: ['Fatal error', 'Warning:', 'no-pick', 'data-buy-bar hidden'],
 }, { query: '?buy=video:2', get: { buy: 'video:2' } });
 
 scenario('home-buy-bundle', `
@@ -406,8 +410,13 @@ seed_payment($db, ['order_id' => 'order_B', 'payment_id' => 'pay_B', 'status' =>
 }, { login: true });
 
 scenario('admin-settings', '', 'admin/settings.php', {
-    has: ['Legacy single video', '0 = forever', 'access_days', 'Fallback price', 'Bundles'],
-    hasNot: ['Fatal error', 'Warning:'],
+    has: ['Channel link', '0 = forever', 'access_days', 'Bundles'],
+    hasNot: [
+        'Fatal error', 'Warning:',
+        // no store-wide price, no legacy single video any more
+        'Fallback price', 'name="amount"', 'Legacy single video',
+        'youtube_video_url', 'Used only for the fallback single video',
+    ],
 }, { login: true });
 
 scenario('admin-dashboard', `
@@ -426,25 +435,29 @@ seed_payment($db);
 scenario('restore-page', '', 'restore.php', {
     has: [
         'Restore access',
-        'Enter the <strong>mobile number and name</strong> you used at checkout',
-        'No e-mail or password needed',
+        'Enter the <strong>mobile number</strong> you used at checkout',
+        'No name, e-mail or password needed',
         'id="mobile" name="mobile" type="tel" autocomplete="tel" inputmode="tel" required',
-        'id="name" name="name" type="text" autocomplete="name" required',
         'Email address <span class="field__optional">optional</span>',
         'placeholder="you@example.com (not required)"',
+        'Your mobile number is enough',
         'Your access does not expire',
     ],
     hasNot: [
+        // the name is never asked for at restore
+        'id="name"', 'name="name"', 'autocomplete="name"',
+        'mobile number and name',
         'placeholder="you@example.com" required',
         'Fatal error', 'Warning:',
     ],
 });
 
 // ---------------------------------------------------------------------------
-// Restore access: mobile + name, e-mail optional (real POST through the form)
+// Restore access: mobile number only, e-mail optional (real POST through the
+// form). No name is ever posted or required.
 // ---------------------------------------------------------------------------
 
-scenario('restore-post-mobile-name', `
+scenario('restore-post-mobile-only', `
 seed_videos($db);
 seed_bundle($db);
 seed_payment($db, ['user_email' => '']);
@@ -452,7 +465,7 @@ seed_payment($db, ['user_email' => '']);
     has: ['http-equiv="refresh"', 'success.php?t='],
     hasNot: ['Fatal error', 'Warning:', 'could not find'],
 }, {
-    post: { name: 'asha   verma', mobile: '98765 43210', email: '' },
+    post: { mobile: '98765 43210', email: '' },
     csrf: true,
     redirect: true,
 });
@@ -465,24 +478,23 @@ seed_payment($db);
     has: ['http-equiv="refresh"', 'success.php?t='],
     hasNot: ['Fatal error', 'Warning:', 'could not find'],
 }, {
-    post: { name: 'A. Verma', mobile: '9876543210', email: 'Asha@Example.com' },
+    post: { mobile: '9876543210', email: 'Asha@Example.com' },
     csrf: true,
     redirect: true,
 });
 
-scenario('restore-post-wrong-name', `
+scenario('restore-post-unknown-mobile', `
 seed_videos($db);
 seed_bundle($db);
 seed_payment($db, ['user_email' => '']);
 `, 'restore.php', {
     has: [
-        'We could not find a successful payment for that mobile number and name',
-        'value="Ravi Kumar"',
-        'value="9876543210"',
+        'We could not find a successful payment for that mobile number',
+        'value="9000000000"',
     ],
-    hasNot: ['http-equiv="refresh"', 'Fatal error', 'Warning:'],
+    hasNot: ['http-equiv="refresh"', 'Fatal error', 'Warning:', 'name="name"'],
 }, {
-    post: { name: 'Ravi Kumar', mobile: '9876543210', email: '' },
+    post: { mobile: '9000000000', email: '' },
     csrf: true,
 });
 
@@ -491,10 +503,10 @@ seed_videos($db);
 seed_bundle($db);
 seed_payment($db);
 `, 'restore.php', {
-    has: ['That e-mail address does not look right'],
+    has: ['That e-mail address does not look right', 'value="9876543210"'],
     hasNot: ['http-equiv="refresh"', 'Fatal error', 'Warning:'],
 }, {
-    post: { name: 'Asha Verma', mobile: '9876543210', email: 'not-an-email' },
+    post: { mobile: '9876543210', email: 'not-an-email' },
     csrf: true,
 });
 

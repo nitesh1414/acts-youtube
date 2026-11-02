@@ -197,6 +197,29 @@
         if (cta) { cta.hidden = true; }
     }
 
+    /**
+     * The floating "you are buying" bar starts hidden: it is only meaningful
+     * after the visitor picks a video or a bundle.
+     */
+    let buyBarWatched = false;
+
+    function revealBuyBar() {
+        const bar = document.querySelector('[data-buy-bar]');
+        if (!bar) { return; }
+        bar.hidden = false;
+        document.body.classList.add('has-buy-bar');
+        // A choice has been made: the phone checkout may show itself now.
+        document.body.classList.remove('no-pick');
+
+        const checkout = document.getElementById('checkout');
+        if (!buyBarWatched && checkout && 'IntersectionObserver' in window) {
+            buyBarWatched = true;
+            new IntersectionObserver(function (entries) {
+                bar.hidden = entries[0].isIntersecting;
+            }, { rootMargin: '-64px 0px -35% 0px' }).observe(checkout);
+        }
+    }
+
     function selectProduct(trigger) {
         const form = document.getElementById('payment-form');
         if (!form) { return; }
@@ -227,11 +250,13 @@
         if (periodNode) { periodNode.textContent = period ? '/ ' + period : ''; }
         if (buttonLabel) { buttonLabel.textContent = 'Pay ' + label + ' & unlock'; }
 
-        // Keep the phone action bar in step with what will be charged.
+        // Keep the phone action bar in step with what will be charged — and
+        // show it now that something has really been picked.
         const barName = document.getElementById('buy-bar-name');
         const barPrice = document.getElementById('buy-bar-price');
         if (barName) { barName.textContent = name; }
         if (barPrice) { barPrice.textContent = label; }
+        revealBuyBar();
 
         const key = type + ':' + id;
         document.querySelectorAll('[data-product-card]').forEach(function (card) {
@@ -263,15 +288,9 @@
     function initMobileChrome() {
         // Hide the action bar once the real checkout form is on screen.
         const buyBar = document.querySelector('[data-buy-bar]');
-        const checkout = document.getElementById('checkout');
-        if (buyBar) {
-            // Reserve room so the floating bar never covers the last section.
-            document.body.classList.add('has-buy-bar');
-        }
-        if (buyBar && checkout && 'IntersectionObserver' in window) {
-            new IntersectionObserver(function (entries) {
-                buyBar.hidden = entries[0].isIntersecting;
-            }, { rootMargin: '-64px 0px -35% 0px' }).observe(checkout);
+        if (buyBar && !buyBar.hidden) {
+            // An explicit ?buy= link: the bar is already relevant.
+            revealBuyBar();
         }
 
         // Highlight the tab for the section in view (storefront only).

@@ -140,30 +140,23 @@ final class Payments
     /**
      * Find the buyer behind a restore request.
      *
-     * Mobile is the identity. Without an e-mail the name is the proof ("Asha"
-     * matches "Asha Verma"); with an e-mail, that e-mail must be the one stored
-     * at checkout. The newest matching payment wins.
+     * The mobile number alone identifies the buyer — that is the one detail
+     * every purchase has, and it is what the offer promises. An e-mail is only
+     * used as an extra check when the buyer types one.
      *
      * @return array<string, mixed>|null
      */
-    public function findForRestore($name, $mobile, $email = '')
+    public function findRestorablePayment($mobile, $email = '')
     {
         $email = strtolower(trim((string) $email));
-        $name = (string) $name;
 
         foreach ($this->successfulForMobile($mobile) as $payment) {
-            $storedEmail = strtolower(trim((string) ($payment['user_email'] ?? '')));
-
-            // When an e-mail is typed it must match the one stored at checkout;
-            // when it is left blank the name is the proof.
-            if ($email !== '') {
-                if ($storedEmail !== '' && $storedEmail === $email) {
-                    return $payment;
-                }
-                continue;
+            if ($email === '') {
+                return $payment; // newest purchase with this number
             }
 
-            if (names_match((string) ($payment['user_name'] ?? ''), $name)) {
+            $storedEmail = strtolower(trim((string) ($payment['user_email'] ?? '')));
+            if ($storedEmail !== '' && $storedEmail === $email) {
                 return $payment;
             }
         }

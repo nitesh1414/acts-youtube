@@ -124,7 +124,7 @@ $v3 = $catalog->createVideo(['title' => 'Gamma', 'description' => 'C', 'youtube_
 $beforeBundle = catalog_storefront();
 check(count($beforeBundle['videos']) === 2, 'storefront lists the active videos');
 check($beforeBundle['bundles'] === [], 'no bundles before one is created');
-check($beforeBundle['legacy'] === null, 'no legacy product while videos exist');
+check(!isset($beforeBundle['legacy']), 'the storefront has no fallback product at all');
 
 $bundleId = $catalog->createBundle(['name' => 'Bundle A', 'description' => '', 'price' => 300, 'position' => 1, 'is_active' => true], [$v1]);
 $catalog->createBundle(['name' => 'Hidden bundle', 'description' => '', 'price' => 100, 'position' => 2, 'is_active' => false], [$v2]);
@@ -133,7 +133,7 @@ $store = catalog_storefront();
 check(count($store['videos']) === 2, 'storefront lists only active videos');
 check(count($store['bundles']) === 1, 'storefront lists only active bundles');
 check($store['bundles'][0]['name'] === 'Bundle A', 'bundle name reaches the shop');
-check($store['legacy'] === null, 'no legacy product while the library has videos');
+check(count($store) === 2 && isset($store['videos'], $store['bundles']), 'storefront is exactly videos + bundles');
 
 $selected = catalog_selected_product($store, 'video:2');
 check($selected['type'] === 'video' && (int) $selected['id'] === $v2, '?buy=video:2 selects that video');
@@ -176,20 +176,24 @@ check(catalog_product('video', $v3, false) !== null, 'catalog_product can includ
 check(catalog_product('bundle', $bundleId)['name'] === 'Bundle A', 'bundle product carries its name');
 check(catalog_product('nosuch', 1) === null, 'unknown product type is rejected');
 
-// The legacy single-video fallback.
+// No fallback product: an empty library means nothing is on sale.
 $db = fake_db();
-$db->tables['settings'][0]['youtube_video_url'] = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-$db->tables['settings'][0]['amount'] = '499.00';
-app()->settings->refresh();
 foreach (['videos', 'bundles', 'bundle_items'] as $table) {
     $db->tables[$table] = [];
 }
-$legacyStore = catalog_storefront();
-check($legacyStore['legacy'] !== null, 'legacy product appears when the library is empty');
-check(abs($legacyStore['legacy']['price'] - 499.0) < 0.001, 'legacy product uses the settings price');
-check((int) $legacyStore['legacy']['videos'][0]['id'] === 0, 'legacy video has no id');
-$legacySelected = catalog_selected_product($legacyStore, '');
-check($legacySelected['type'] === 'single', 'legacy product is sold as type single');
+$emptyStore = catalog_storefront();
+check($emptyStore['videos'] === [] && $emptyStore['bundles'] === [], 'an empty library lists nothing');
+check(catalog_selected_product($emptyStore, '') === null, 'nothing is preselected when nothing is on sale');
+check(catalog_selected_product($emptyStore, 'video:1') === null, 'a stale ?buy= link selects nothing');
+check(catalog_product('video', 1) === null, 'a missing video cannot be bought');
+check(function_exists('catalog_legacy_product') === false, 'the legacy product helper was deleted');
+
+// The store-wide price setting is gone for good.
+$settingsModel = (string) file_get_contents('/app/lib/settings.php');
+check(strpos($settingsModel, 'function amount(') === false, 'Settings::amount() was deleted');
+$settingsAll = app()->settings->all();
+check(!array_key_exists('amount', $settingsAll), 'settings no longer expose a fallback price');
+check(!array_key_exists('youtube_video_url', $settingsAll), 'settings no longer expose a fallback video link');
 
 // ---------------------------------------------------------------------------
 // Payments, entitlements, lifetime access
@@ -243,16 +247,16 @@ $singleVideos = catalog_videos_for_payment($payments->find($singleId));
 check(count($singleVideos) === 1, 'single purchase unlocks one video');
 check((int) $singleVideos[0]['id'] === $v2, 'the right video');
 
-$db->tables['settings'][0]['youtube_video_url'] = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-app()->settings->refresh();
-$legacyId = $payments->create([
+// A payment that names no product unlocks nothing on its own — it is never
+// silently pointed at a store-wide video.
+$orphanId = $payments->create([
     'order_id' => 'order_3', 'user_name' => 'Old Buyer', 'user_email' => 'old@example.com',
     'user_mobile' => '9000000002', 'amount' => 199, 'currency' => 'INR',
 ]);
-$payments->markSuccess($legacyId, ['payment_id' => 'pay_3', 'method' => 'upi']);
-$legacy = $payments->find($legacyId);
-catalog_grant_for_payment($legacy);
-check(catalog_videos_for_payment($legacy) !== [], 'legacy payment still gets the settings video');
+$payments->markSuccess($orphanId, ['payment_id' => 'pay_3', 'method' => 'upi']);
+$orphan = $payments->find($orphanId);
+catalog_grant_for_payment($orphan);
+check(catalog_videos_for_payment($orphan) === [], 'a payment without a product unlocks nothing');
 
 // --- a buyer's library keeps earlier purchases ----------------------------
 $buyer = ['user_email' => 'repeat@example.com', 'user_mobile' => '9111111111'];
@@ -441,30 +445,30 @@ $state = catalog_owned_state($payments->find($noEmail));
 sort($state['videos']);
 check($state['videos'] === [$ep1, $ep2], 'ownership merges across e-mail-less and e-mailed purchases: ' . json_encode($state['videos']));
 
-// Restore access: name + mobile, e-mail optional.
-check($payments->findForRestore('Asha Verma', '9876543210') !== null, 'restore works with name + mobile only');
-check($payments->findForRestore('  asha   verma ', '+919876543210') !== null, 'restore is forgiving about case, spacing and the country code');
-check($payments->findForRestore('Asha', '9876543210') !== null, 'a first name matches the stored full name');
-check($payments->findForRestore('Asha Verma', '9876543210', 'asha@example.com') !== null, 'a matching e-mail is accepted');
-check($payments->findForRestore('Asha Verma', '9876543210', 'someone@example.com') === null, 'a wrong e-mail is rejected');
-check($payments->findForRestore('Ravi Kumar', '9876543210') === null, 'a wrong name is rejected');
-check($payments->findForRestore('Verm', '9876543210') === null, 'a partial name fragment is not enough');
-check($payments->findForRestore('Asha Verma', '9000000000') === null, 'an unknown mobile finds nothing');
-
-// Names in other scripts must not be mangled by the comparison.
-$nameKey = name_key('अनिल कुमार');
-check($nameKey !== '' && strpos($nameKey, 'अनिल') === 0, 'name_key keeps non-Latin letters: ' . $nameKey);
-check(names_match('अनिल कुमार', 'अनिल कुमार') === true, 'Devanagari names match exactly');
-check(names_match("Asha  Verma.", 'asha verma') === true, 'punctuation and spacing do not matter');
-check(names_match('Asha Verma', 'Verm') === false, 'a name fragment is not a match');
+// Restore access: the mobile number alone is enough (no name is asked for).
+$restored = $payments->findRestorablePayment('9876543210');
+check($restored !== null, 'restore works with the mobile number only');
+check((int) $restored['id'] === $withEmail, 'restore returns the newest payment for that number');
+$restored = $payments->findRestorablePayment('+91 98765 43210');
+check($restored !== null && (int) $restored['id'] === $withEmail, 'restore is forgiving about spacing and the country code');
+check($payments->findRestorablePayment('9876543210', 'asha@example.com') !== null, 'a matching e-mail is accepted as well');
+check($payments->findRestorablePayment('9876543210', 'someone@example.com') === null, 'a wrong e-mail is rejected');
+check($payments->findRestorablePayment('9000000000') === null, 'an unknown mobile finds nothing');
+check($payments->findRestorablePayment('') === null, 'an empty mobile finds nothing');
 check(display_email('') === '—' && display_email('a@b.in') === 'a@b.in', 'display_email hides the optional field');
+
+// The name is no longer part of the lookup at all.
+$paymentsModel = (string) file_get_contents('/app/lib/payments.php');
+check(strpos($paymentsModel, 'findForRestore') === false, 'the name-based restore lookup is gone');
+check(strpos($paymentsModel, 'findRestorablePayment') !== false, 'the mobile-based restore lookup exists');
+check(!function_exists('names_match') && !function_exists('name_key'), 'the name-matching helpers were removed');
 
 // A pending payment never restores access.
 $pendingOnly = $payments->create([
     'order_id' => 'order_ne3', 'user_name' => 'Pending Person', 'user_mobile' => '9555555555',
     'amount' => 199, 'currency' => 'INR', 'product_type' => 'video', 'product_id' => $ep1, 'product_name' => 'Ep 1',
 ]);
-check($payments->findForRestore('Pending Person', '9555555555') === null, 'pending payments cannot be restored');
+check($payments->findRestorablePayment('9555555555') === null, 'pending payments cannot be restored');
 
 // Customers are counted by mobile number, not by an optional e-mail.
 $stats = $payments->stats();
@@ -477,7 +481,7 @@ check(
     'create_order only validates an e-mail that was actually given'
 );
 $restoreController = (string) file_get_contents('/app/restore.php');
-check(strpos($restoreController, 'findForRestore(') !== false, 'restore looks buyers up by name + mobile');
+check(strpos($restoreController, 'findRestorablePayment(') !== false, 'restore looks buyers up by mobile number');
 check(strpos($restoreController, 'valid_email($email)') !== false, 'restore still validates an optional e-mail');
 
 // ---------------------------------------------------------------------------

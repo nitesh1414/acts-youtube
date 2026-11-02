@@ -9,7 +9,7 @@
  * always stays in control of what they pay for.
  *
  * @var array<string, mixed>            $settings
- * @var array<string, mixed>            $storefront videos, bundles, legacy
+ * @var array<string, mixed>            $storefront videos, bundles
  * @var array<string, mixed>|null       $selected   product preselected for checkout
  */
 $currency = (string) $settings['currency'];
@@ -20,7 +20,6 @@ $channel = (string) $settings['youtube_channel_url'];
 
 $videos = $storefront['videos'];
 $bundles = $storefront['bundles'];
-$legacy = $storefront['legacy'];
 $hasProducts = $selected !== null;
 $totalVideos = count($videos);
 $totalBundles = count($bundles);
@@ -460,6 +459,13 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                 </div>
             <?php else: ?>
             <div class="checkout">
+                <?php // On phones the checkout stays out of sight until something is picked. ?>
+                <div class="card card--pad pick-prompt" id="pick-prompt">
+                    <?= icon('tag', 26) ?>
+                    <h3>Pick a video or a bundle</h3>
+                    <p>Choose one above and the price and the payment form appear here. Nothing is bought until you press <strong>Pay</strong>.</p>
+                </div>
+
                 <div class="card card--pad paycard">
                     <div class="paycard__head">
                         <div>
@@ -735,8 +741,13 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
 <?php endif; ?>
 
 <?php if ($hasProducts && !$selectedOwned): ?>
-    <?php // App-style action bar on phones: shows what will be charged and jumps to the form. ?>
-    <div class="buy-bar" data-buy-bar>
+    <?php
+    // App-style action bar on phones. It only appears once the visitor has
+    // actually picked something: an explicit ?buy= link counts as a pick, the
+    // default preselection does not (nobody is "buying" anything yet).
+    $explicitPick = !empty($explicitPick) || trim((string) query_str('buy')) !== '';
+    ?>
+    <div class="buy-bar" data-buy-bar<?= $explicitPick ? '' : ' hidden' ?>>
         <div class="buy-bar__info">
             <span class="buy-bar__label"><?= icon('tag', 12) ?> You are buying</span>
             <span class="buy-bar__name" id="buy-bar-name"><?= e($selected['name']) ?></span>

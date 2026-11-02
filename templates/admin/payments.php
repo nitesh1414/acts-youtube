@@ -121,12 +121,12 @@ $hasFilters = $filters['q'] !== '' || $filters['status'] !== '' || $filters['fro
                                 <?php
                                 $productName = isset($payment['product_name']) && $payment['product_name'] !== ''
                                     ? (string) $payment['product_name']
-                                    : 'Legacy single video';
+                                    : 'No product recorded';
                                 $type = isset($payment['product_type']) ? (string) $payment['product_type'] : 'single';
                                 ?>
                                 <span class="product-cell">
                                     <strong><?= e(text_limit($productName, 42)) ?></strong>
-                                    <span class="badge badge--muted tiny"><?= $type === 'bundle' ? 'Bundle' : ($type === 'video' ? 'Video' : 'Legacy') ?></span>
+                                    <span class="badge badge--muted tiny"><?= $type === 'bundle' ? 'Bundle' : ($type === 'video' ? 'Video' : 'Untracked') ?></span>
                                 </span>
                             </td>
                             <td data-label="Mobile" class="mono small"><?= e(display_mobile($payment['user_mobile'])) ?></td>

@@ -555,6 +555,8 @@ final class Schema
             return $changes;
         }
 
+        // Legacy columns: still read here (and only here) to migrate a v1/v2
+        // install's single video into the library.
         $videoUrl = isset($settings['youtube_video_url']) ? trim((string) $settings['youtube_video_url']) : '';
         $videoId = null;
 

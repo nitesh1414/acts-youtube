@@ -24,8 +24,8 @@ if (is_post()) {
     $errors = $result['errors'];
     // Keep what the admin typed (secrets are intentionally not echoed back).
     $form = array_merge($form, array_intersect_key($_POST, array_flip([
-        'site_name', 'logo_text', 'tagline', 'amount', 'access_days',
-        'youtube_video_url', 'youtube_channel_url', 'support_email',
+        'site_name', 'logo_text', 'tagline', 'access_days',
+        'youtube_channel_url', 'support_email',
         'support_phone', 'razorpay_key_id', 'theme_color',
     ])));
     $form['demo_mode'] = !empty($_POST['demo_mode']) ? 1 : 0;

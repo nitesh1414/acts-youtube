@@ -19,7 +19,7 @@ $form = $video !== null ? $video : [
     'title'       => '',
     'description' => '',
     'youtube_url' => '',
-    'price'       => (string) $settings['amount'],
+    'price'       => '',
     'position'    => count($catalog->videos(false)) + 1,
     'is_active'   => true,
 ];

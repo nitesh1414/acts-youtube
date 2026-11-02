@@ -116,7 +116,10 @@ $lifetimeDefault = (int) $settings['access_days'] === 0;
         </div>
 
         <dl class="mini-list">
-            <div><dt>Price</dt><dd class="strong"><?= e(money($settings['amount'], $currency)) ?></dd></div>
+            <div><dt>Products</dt>
+                <dd class="strong"><?= (int) $library['videos'] ?> video<?= (int) $library['videos'] === 1 ? '' : 's' ?>
+                    · <?= (int) $library['bundles'] ?> bundle<?= (int) $library['bundles'] === 1 ? '' : 's' ?></dd>
+            </div>
             <div><dt>Access window</dt>
                 <dd><?= $lifetimeDefault ? 'No expiry' : ((int) $settings['access_days'] . ' days') ?></dd>
             </div>

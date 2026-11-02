@@ -392,7 +392,7 @@ final class Catalog
 /**
  * A product the visitor can buy: a single video or a bundle.
  *
- * @param  string $type  "video" | "bundle" | "single" (legacy)
+ * @param  string $type  "video" | "bundle"
  * @param  int    $id
  * @param  bool   $activeOnly  false when granting access to a product that was
  *                             switched off while its payment was in flight.
@@ -443,47 +443,12 @@ function catalog_product($type, $id, $activeOnly = true)
 }
 
 /**
- * The single-video product used by installs that never had a library (or by a
- * visitor opening a v2 link): the YouTube URL + price from site settings.
- *
- * @return array<string, mixed>|null
- */
-function catalog_legacy_product()
-{
-    $settings = app()->settings->all();
-    $url = trim((string) $settings['youtube_video_url']);
-    if ($url === '') {
-        return null;
-    }
-
-    $video = [
-        'id'          => 0,
-        'title'       => (string) $settings['site_name'],
-        'description' => (string) $settings['tagline'],
-        'youtube_url' => $url,
-        'youtube_id'  => youtube_id($url),
-        'embed_url'   => youtube_embed_url($url),
-        'watch_url'   => youtube_watch_url($url),
-        'thumbnail'   => youtube_thumbnail($url, 'hqdefault'),
-        'price'       => (float) $settings['amount'],
-        'is_active'   => true,
-    ];
-
-    return [
-        'type'        => 'single',
-        'id'          => 0,
-        'name'        => (string) $settings['site_name'],
-        'price'       => (float) $settings['amount'],
-        'videos'      => [$video],
-        'thumbnail'   => (string) $video['thumbnail'],
-        'description' => (string) $settings['tagline'],
-    ];
-}
-
-/**
  * Everything the landing page sells, in display order.
  *
- * @return array{videos:array<int,array<string,mixed>>, bundles:array<int,array<string,mixed>>, legacy:array<string,mixed>|null}
+ * There is no fallback product: if the owner has not published a video or a
+ * bundle, nothing is on sale and the page says so.
+ *
+ * @return array{videos:array<int,array<string,mixed>>, bundles:array<int,array<string,mixed>>}
  */
 function catalog_storefront()
 {
@@ -496,9 +461,7 @@ function catalog_storefront()
         return $bundle['videos'] !== [];
     }));
 
-    $legacy = ($videos === [] && $bundles === []) ? catalog_legacy_product() : null;
-
-    return ['videos' => $videos, 'bundles' => $bundles, 'legacy' => $legacy];
+    return ['videos' => $videos, 'bundles' => $bundles];
 }
 
 /**
@@ -519,9 +482,9 @@ function catalog_grant_for_payment(array $payment)
     $productId = isset($payment['product_id']) ? (int) $payment['product_id'] : 0;
 
     // Inactive products still unlock: the customer paid before it was hidden.
-    $product = $type !== '' && $type !== 'single' ? catalog_product($type, $productId, false) : null;
+    $product = $type !== '' ? catalog_product($type, $productId, false) : null;
     if ($product === null) {
-        return; // Legacy payment: access falls back to the settings video.
+        return; // A payment that predates the library: update.php links those.
     }
 
     $videoIds = [];
@@ -539,13 +502,7 @@ function catalog_grant_for_payment(array $payment)
  */
 function catalog_videos_for_payment(array $payment)
 {
-    $videos = app()->catalog->videosForPayment((int) $payment['id']);
-    if ($videos !== []) {
-        return $videos;
-    }
-
-    $legacy = catalog_legacy_product();
-    return $legacy === null ? [] : $legacy['videos'];
+    return app()->catalog->videosForPayment((int) $payment['id']);
 }
 
 /**
@@ -763,5 +720,5 @@ function catalog_selected_product(array $storefront, $requested = '')
         return catalog_product_from_item('bundle', $storefront['bundles'][0]);
     }
 
-    return $storefront['legacy'] ?? null;
+    return null;
 }

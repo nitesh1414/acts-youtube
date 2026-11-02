@@ -69,7 +69,7 @@ $embed = youtube_embed_url($value('youtube_url', ''));
             <div class="field">
                 <label for="price">Price (<?= e($currency) ?>)</label>
                 <input class="input" id="price" name="price" type="number" min="1" max="500000" step="0.01" required
-                       value="<?= e($value('price')) ?>">
+                       value="<?= e($value('price')) ?>" placeholder="199">
                 <?php if ($error('price')): ?><p class="field__error"><?= e($error('price')) ?></p><?php endif; ?>
             </div>
 

@@ -24,7 +24,7 @@ $webhookSet = trim((string) $settings['razorpay_webhook_secret']) !== '';
 <nav class="tabs" aria-label="Settings sections">
     <a href="#branding"><?= icon('image', 16) ?> Branding</a>
     <a href="#payments"><?= icon('credit-card', 16) ?> Payments</a>
-    <a href="#content"><?= icon('youtube', 16) ?> Fallback video</a>
+    <a href="#content"><?= icon('youtube', 16) ?> Channel</a>
     <a href="#access"><?= icon('lock', 16) ?> Access</a>
     <a href="#contact"><?= icon('mail', 16) ?> Support</a>
 </nav>
@@ -114,16 +114,6 @@ $webhookSet = trim((string) $settings['razorpay_webhook_secret']) !== '';
 
         <div class="form-grid">
             <div class="field">
-                <label for="amount">Fallback price (<?= e($currency) ?>)</label>
-                <div class="input-prefix">
-                    <span><?= e(currency_symbol($currency)) ?></span>
-                    <input class="input" id="amount" name="amount" type="number" min="1" max="500000" step="0.01"
-                           value="<?= e($value('amount', $settings['amount'])) ?>" required>
-                </div>
-                <p class="hint">Used only for the fallback single video. Real prices come from each video.</p>
-                <?php if ($error('amount')): ?><p class="field__error"><?= e($error('amount')) ?></p><?php endif; ?>
-            </div>
-            <div class="field">
                 <label for="demo_mode">Demo mode</label>
                 <label class="switch">
                     <input type="checkbox" id="demo_mode" name="demo_mode" value="1" <?= $value('demo_mode', (string) $settings['demo_mode']) === '1' ? 'checked' : '' ?>>
@@ -172,40 +162,18 @@ $webhookSet = trim((string) $settings['razorpay_webhook_secret']) !== '';
         </div>
     </section>
 
-    <!-- Video ------------------------------------------------------------- -->
+    <!-- Channel ----------------------------------------------------------- -->
     <section class="card card--pad" id="content">
         <header class="card__head">
             <div>
-                <h2><?= icon('youtube', 18) ?> Legacy single video</h2>
-                <p class="muted small">Only used when the video library is empty. Manage real videos in <a href="<?= e(url('admin/videos.php')) ?>">Videos</a>.</p>
+                <h2><?= icon('youtube', 18) ?> YouTube channel</h2>
+                <p class="muted small">Optional. Videos themselves are added in <a href="<?= e(url('admin/videos.php')) ?>">Videos</a>.</p>
             </div>
-            <span class="badge badge--muted">Fallback</span>
         </header>
-
-        <div class="alert alert--info">
-            <?= icon('info', 18) ?>
-            <span>
-                Videos and prices now live in <a href="<?= e(url('admin/videos.php')) ?>">Videos</a>, and groups of videos
-                in <a href="<?= e(url('admin/bundles.php')) ?>">Bundles</a>. The fields below are a fallback used only while
-                the library has no videos (for example right after upgrading).
-            </span>
-        </div>
 
         <div class="form-grid">
             <div class="field field--full">
-                <label for="youtube_video_url">Fallback YouTube video link</label>
-                <input class="input" id="youtube_video_url" name="youtube_video_url" value="<?= e($value('youtube_video_url', $settings['youtube_video_url'])) ?>"
-                       placeholder="https://www.youtube.com/watch?v=XXXXXXXXXXX" data-youtube-input>
-                <p class="hint">Accepts watch, youtu.be, shorts, live and embed links.</p>
-                <?php if ($error('youtube_video_url')): ?><p class="field__error"><?= e($error('youtube_video_url')) ?></p><?php endif; ?>
-                <div class="video-preview" data-youtube-preview <?= youtube_thumbnail($settings['youtube_video_url']) === '' ? 'hidden' : '' ?>>
-                    <img src="<?= e(youtube_thumbnail($settings['youtube_video_url'])) ?>" alt="Video thumbnail" data-youtube-thumb>
-                    <span class="video-preview__badge"><?= icon('play', 14) ?> Preview</span>
-                </div>
-            </div>
-
-            <div class="field field--full">
-                <label for="youtube_channel_url">YouTube channel link <span class="muted small">(optional)</span></label>
+                <label for="youtube_channel_url">Channel link <span class="muted small">(optional)</span></label>
                 <input class="input" id="youtube_channel_url" name="youtube_channel_url" value="<?= e($value('youtube_channel_url', $settings['youtube_channel_url'])) ?>"
                        placeholder="https://www.youtube.com/@yourchannel">
                 <p class="hint">Used for the “Subscribe” buttons after payment and on the home page.</p>

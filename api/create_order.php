@@ -53,18 +53,18 @@ $itemType = isset($input['item_type']) && is_scalar($input['item_type'])
     : '';
 $itemId = isset($input['item_id']) && is_scalar($input['item_id']) ? (int) $input['item_id'] : 0;
 
-if ($itemType !== '' && $itemType !== 'single') {
-    $product = catalog_product($itemType, $itemId, true);
-    if ($product === null) {
-        json_response(['error' => 'That video or bundle is no longer available. Please pick another one.'], 404);
-    }
-} else {
-    // Older page/bookmark: fall back to the first item on sale.
-    $storefront = catalog_storefront();
-    $product = catalog_selected_product($storefront, '');
-    if ($product === null) {
-        json_response(['error' => 'Nothing is on sale yet. Please check back soon.'], 503);
-    }
+// There is no fallback product any more: the buyer must say what they are
+// buying, and the price is read from that row.
+if ($itemType !== 'video' && $itemType !== 'bundle') {
+    json_response(['error' => 'Please choose a video or a bundle first.'], 422);
+}
+if ($itemId < 1) {
+    json_response(['error' => 'Please choose a video or a bundle first.'], 422);
+}
+
+$product = catalog_product($itemType, $itemId, true);
+if ($product === null) {
+    json_response(['error' => 'That video or bundle is no longer available. Please pick another one.'], 404);
 }
 
 $amount = (float) $product['price'];

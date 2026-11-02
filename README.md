@@ -56,9 +56,8 @@ no build step, no Node.js required.
   player and a receipt (`success.php?t=…&v=3`). Opening it again later just works —
   access never expires unless you set an access window.
 - **Access restore**: buyers who clear cookies or switch devices recover their link with
-  the **mobile number + name** they paid with (rate limited). The e-mail is optional there
-  too — if one is typed it must match the receipt, otherwise the mobile number is the
-  identity and the name proves ownership ("Asha" matches "Asha Verma").
+  the **mobile number** they paid with (rate limited) — no name to remember. The e-mail is
+  optional there too: if one is typed it must match the receipt.
 - **Demo mode**: test the complete payment flow with no Razorpay account and no money.
 - Installable PWA (dynamic manifest, offline fallback page, service worker).
 - **Mobile app experience** on phones (≤ 760 px): compact sticky header, a fixed bottom
@@ -84,8 +83,9 @@ no build step, no Node.js required.
 - **Logo uploader** (drag & drop, validated) — replaces the old "Logo URL" text field.
 - Site settings: branding (logo, logo text, site name, tagline, accent colour), Razorpay
   keys, webhook secret + copyable webhook URL, access duration (**0 = forever**), YouTube
-  channel link, support e-mail/phone, demo mode toggle. The old single-video field is kept
-  as a clearly-labelled *fallback* used only while the library is empty.
+  channel link, support e-mail/phone, demo mode toggle. Prices live on each video/bundle —
+  there is no store-wide price and no fallback single-video product any more, so an empty
+  library simply means nothing is on sale.
 - Admin users: multiple accounts, bcrypt hashes, add / enable / disable / delete,
   change-own-password. Throttled login with session fingerprinting and idle timeout.
 
@@ -296,13 +296,12 @@ Buy links stay plain links in that state so picking something new reloads with `
 is `NULL`, the access token keeps working, and the buyer's library is available any time.
 Set a positive number in *Site settings → Access* to sell time-limited access instead;
 existing lifetime purchases are never shortened by changing the setting.
-- Buyers can recover access at `/restore.php` with their **mobile number + name**
-  (6 tries / 15 min). The e-mail field there is optional; name matching ignores case,
-  extra spaces and punctuation, and works for non-Latin names.
+- Buyers can recover access at `/restore.php` with their **mobile number**
+  (6 tries / 15 min). No name is asked for; the e-mail field there is optional.
 - The **mobile number is the buyer's identity**: `user_email` may be empty, so the library
   (and the *Owned* state) is matched on `user_mobile`, never on an e-mail nobody had to give.
-  `findForRestore()` returns the newest successful payment for that number whose name
-  matches, or whose stored e-mail equals an e-mail the buyer typed.
+  `findRestorablePayment()` returns the newest successful payment for that number, and —
+  when the buyer also types an e-mail — only if the stored e-mail is the same.
 - Every step is written to `payment_events` and shown in the admin timeline.
 
 ---
@@ -326,9 +325,14 @@ design is untouched.
 - Header keeps the logo and two icon shortcuts (library/restore + admin); the text nav is
   replaced by the **bottom tab bar**: Home · Videos · Bundles · Library (or Restore).
   The active tab follows the section in view (a small scroll spy in `app.js`).
+- Nothing is bought before it is chosen: the phone shows a **“Pick a video or a bundle”**
+  prompt in place of the checkout card, and no floating bar, until a card is tapped (an
+  explicit `?buy=video:2` / `?buy=bundle:1` link counts as a choice). `body.no-pick` drives
+  this, and the first tap clears it.
 - A floating **action bar** above the tab bar shows the selected product and its price.
-  It stays in sync when the visitor taps any *Buy* button and slides away once the real
-  checkout form is on screen, so the price is never more than a glance away.
+  It appears with that first choice, stays in sync when the visitor taps any *Buy* button
+  and slides away once the real checkout form is on screen, so the price is never more
+  than a glance away.
 - Hero, stats, bundles, videos, checkout, FAQ and the library all become full-width
   stacked blocks; the hero stats turn into a 2-column tile grid.
 - The buyer library shows a 16:9 player followed by a 2-up video shelf and the receipt.
@@ -369,7 +373,7 @@ design is untouched.
 | Headers | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, CSP |
 | Rate limits | Checkout (10/10 min per IP), access restore (6/15 min), admin login (5 per user+IP) |
 | Secrets | Razorpay secrets never re-rendered into HTML; logs exclude passwords and card data |
-| Enumeration | No public list of payments; tokens are 64 hex chars of `random_bytes`; access restore needs the mobile number **and** the buyer name (or the receipt e-mail) |
+| Enumeration | No public list of payments; tokens are 64 hex chars of `random_bytes`; access restore needs the exact mobile number used at checkout (rate limited to 6 tries / 15 min) |
 | Optional e-mail | `user_email` is never a lookup key: the buyer is identified by the normalised mobile number, so a checkout without an e-mail cannot weaken access control |
 
 **Operational advice**
@@ -389,7 +393,7 @@ design is untouched.
 ```
 ├── index.php                 Storefront (library + bundles + checkout)
 ├── success.php               Private library (token protected, ?v= switches video)
-├── restore.php               Access recovery (mobile + name; e-mail optional)
+├── restore.php               Access recovery (mobile number; e-mail optional)
 ├── demo_pay.php              Simulated checkout (demo mode only)
 ├── manifest.php              Dynamic PWA manifest (uses the uploaded logo)
 ├── sw.js                     Service worker (offline fallback)
@@ -446,7 +450,7 @@ design is untouched.
 
 | Table | Purpose |
 |---|---|
-| `settings` | Single row (`id = 1`): branding, Razorpay keys, access days (`0` = lifetime), fallback video link, demo mode |
+| `settings` | Single row (`id = 1`): branding, Razorpay keys, access days (`0` = lifetime), demo mode |
 | `admin_users` | Admin accounts (`password_hash`, `is_active`, last login metadata) |
 | `payments` | One row per checkout: customer, amount, status, Razorpay ids, access token + expiry (`NULL` = lifetime), product snapshot (`product_type`/`product_id`/`product_name`), IP/UA |
 | `videos` | The library: title, description, YouTube URL, **own price**, position, visibility |
@@ -692,9 +696,10 @@ Because payments touch money, verify these after any change:
    lists only what they paid for).
 11. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
 12. **Locked page** — open `/success.php` in a private window → the library is locked.
-13. **Restore** — clear cookies, visit `/restore.php`, enter the **mobile number and name**
-   used at checkout → access restored (no e-mail needed). Add the receipt e-mail → still
-   works; type a different name → generic error; 7 attempts → rate-limit message.
+13. **Restore** — clear cookies, visit `/restore.php`, enter the **mobile number**
+   used at checkout → access restored (no name, no e-mail needed). Add the receipt e-mail →
+   still works; a wrong e-mail or an unknown number → generic error; 7 attempts →
+   rate-limit message.
 14. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
     the admin payment page says "Lifetime access", and the CSV shows `Lifetime`.
 15. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.

@@ -1,6 +1,5 @@
 <?php
 /** @var array<string, mixed> $settings */
-$amount = (float) $settings['amount'];
 ?>
 <section class="section">
     <div class="wrap section__inner section__inner--narrow">
@@ -9,9 +8,9 @@ $amount = (float) $settings['amount'];
                 <span class="eyebrow"><?= icon('refresh', 15) ?> Access recovery</span>
                 <h1>Restore your access</h1>
                 <p>
-                    Enter the <strong>mobile number and name</strong> you used at checkout.
+                    Enter the <strong>mobile number</strong> you used at checkout.
                     If we find a successful payment, your private library link is re-issued instantly —
-                    no extra charge. No e-mail or password needed.
+                    no extra charge. No name, e-mail or password needed.
                 </p>
                 <ul class="checklist">
                     <li><?= icon('check', 16) ?> Works on any device or browser</li>
@@ -22,7 +21,7 @@ $amount = (float) $settings['amount'];
                 </ul>
                 <p class="muted small">
                     Didn't buy yet?
-                    <a href="<?= e(url('')) ?>">Get access for <?= e(money($amount, $settings['currency'])) ?></a>.
+                    <a href="<?= e(url('')) ?>">Browse the videos and bundles</a>.
                 </p>
             </div>
 
@@ -45,21 +44,13 @@ $amount = (float) $settings['amount'];
                         </div>
                     </div>
                     <div class="field">
-                        <label for="name">Full name <span class="field__optional">as you paid</span></label>
-                        <div class="field__control">
-                            <?= icon('user', 18) ?>
-                            <input id="name" name="name" type="text" autocomplete="name" required
-                                   maxlength="120" value="<?= e(old('name')) ?>" placeholder="Your full name">
-                        </div>
-                    </div>
-                    <div class="field">
                         <label for="email">Email address <span class="field__optional">optional</span></label>
                         <div class="field__control">
                             <?= icon('mail', 18) ?>
                             <input id="email" name="email" type="email" autocomplete="email"
                                    maxlength="190" value="<?= e(old('email')) ?>" placeholder="you@example.com (not required)">
                         </div>
-                        <p class="hint">Only if you entered one at checkout — it just speeds up matching.</p>
+                        <p class="hint">Only if you entered one at checkout. Your mobile number is enough.</p>
                     </div>
 
                     <button type="submit" class="btn btn--primary btn--block btn--lg">

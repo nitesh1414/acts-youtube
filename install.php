@@ -33,7 +33,6 @@ $defaults = [
     'db_pass'    => '',
     'site_url'   => '',
     'site_name'  => 'PayAccess',
-    'amount'     => '199',
     'access_days'=> '0',
     'demo_mode'  => '0',
     'username'   => 'admin',
@@ -151,9 +150,6 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($values['site_name'] === '' || text_length($values['site_name']) > 120) {
         $errors[] = 'Enter a site name (maximum 120 characters).';
     }
-    if (!is_numeric($values['amount']) || (float) $values['amount'] < 1) {
-        $errors[] = 'Enter a valid price.';
-    }
     if (!ctype_digit($values['access_days']) || (int) $values['access_days'] > 3650) {
         $errors[] = 'Access days must be a number between 1 and 3650.';
     }
@@ -228,13 +224,13 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
 
             // --- Settings ---------------------------------------------------
+            // Prices are per video now; there is no store-wide price to store.
             $updateSettings = $pdo->prepare(
-                'UPDATE settings SET site_name = ?, logo_text = ?, amount = ?, access_days = ?, demo_mode = ?, updated_at = NOW() WHERE id = 1'
+                'UPDATE settings SET site_name = ?, logo_text = ?, access_days = ?, demo_mode = ?, updated_at = NOW() WHERE id = 1'
             );
             $updateSettings->execute([
                 $values['site_name'],
                 $values['site_name'],
-                number_format((float) $values['amount'], 2, '.', ''),
                 (int) $values['access_days'],
                 $values['demo_mode'] === '1' ? 1 : 0,
             ]);
@@ -243,9 +239,10 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $demoVideoIds = [];
             $demoBundleId = 0;
             if ($seedDemo) {
+                // Demo prices are fixed so the sample bundle always saves money.
                 $demoVideos = [
-                    ['Episode 1 — Getting started', 'The first video of the demo library. Replace it with your own unlisted link.', 'aqz-KE-bpKQ', number_format((float) $values['amount'], 2, '.', '')],
-                    ['Episode 2 — Going further', 'A second priced video, so you can try buying one video or the bundle.', 'aqz-KE-bpKQ', number_format((float) $values['amount'] + 100, 2, '.', '')],
+                    ['Episode 1 — Getting started', 'The first video of the demo library. Replace it with your own unlisted link.', 'aqz-KE-bpKQ', '199.00'],
+                    ['Episode 2 — Going further', 'A second priced video, so you can try buying one video or the bundle.', 'aqz-KE-bpKQ', '299.00'],
                 ];
                 $insertVideo = $pdo->prepare(
                     'INSERT INTO videos (title, description, youtube_url, price, position, is_active, created_at, updated_at)
@@ -259,7 +256,7 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (count($demoVideoIds) === 2) {
-                    $bundlePrice = number_format(max(1, ((float) $values['amount'] * 2) - 50), 2, '.', '');
+                    $bundlePrice = '399.00'; // 498 bought separately → saves ₹99
                     $pdo->prepare(
                         'INSERT INTO bundles (name, description, price, position, is_active, created_at, updated_at)
                          VALUES (?, ?, ?, 1, 1, NOW(), NOW())'
@@ -278,10 +275,10 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
             // --- Optional demo payments -------------------------------------
             if ($seedDemo) {
                 $demoRows = [
-                    ['Aarav Sharma', 'aarav.sharma@example.com', '9876543210', 'success', 6, 'pay_DemoA1B2C3D4'],
-                    ['Priya Menon', 'priya.menon@example.com', '9822011223', 'success', 3, 'pay_DemoE5F6G7H8'],
-                    ['Rohit Verma', 'rohit.verma@example.com', '9812345678', 'pending', 1, null],
-                    ['Sneha Patil', 'sneha.patil@example.com', '9765432109', 'failed', 2, null],
+                    ['Aarav Sharma', 'aarav.sharma@example.com', '9876543210', 'success', 6, 'pay_DemoA1B2C3D4', '399.00'],
+                    ['Priya Menon', 'priya.menon@example.com', '9822011223', 'success', 3, 'pay_DemoE5F6G7H8', '199.00'],
+                    ['Rohit Verma', 'rohit.verma@example.com', '9812345678', 'pending', 1, null, '199.00'],
+                    ['Sneha Patil', 'sneha.patil@example.com', '9765432109', 'failed', 2, null, '199.00'],
                 ];
                 $insertPayment = $pdo->prepare(
                     "INSERT INTO payments
@@ -294,7 +291,7 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO payment_videos (payment_id, video_id, created_at) VALUES (?, ?, NOW())'
                 );
                 foreach ($demoRows as $index => $row) {
-                    list($name, $email, $mobile, $status, $daysAgo, $razorpayId) = $row;
+                    list($name, $email, $mobile, $status, $daysAgo, $razorpayId, $demoAmount) = $row;
                     $created = date('Y-m-d H:i:s', strtotime('-' . $daysAgo . ' days'));
                     $paid = $status === 'success' ? date('Y-m-d H:i:s', strtotime('-' . $daysAgo . ' days +2 minutes')) : null;
                     $token = $status === 'success' ? random_token(32) : null;
@@ -326,7 +323,7 @@ if (!$locked && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         $name,
                         $email,
                         $mobile,
-                        number_format((float) $values['amount'], 2, '.', ''),
+                        $demoAmount,
                         $status,
                         $orderId,
                         $razorpayId,
@@ -583,11 +580,10 @@ installer_head('Install PayAccess');
                     <label for="site_name">Site name</label>
                     <input id="site_name" name="site_name" value="<?= e($values['site_name']) ?>" maxlength="120" required>
                 </div>
-                <div class="field row3">
-                    <div>
-                        <label for="amount">Price (₹)</label>
-                        <input id="amount" name="amount" type="number" min="1" step="0.01" value="<?= e($values['amount']) ?>" required>
-                    </div>
+                <p class="muted" style="margin-top:-2px">
+                    Prices are set per video in <strong>Admin → Videos</strong>, so there is no store-wide price to enter here.
+                </p>
+                <div class="field row">
                     <div>
                         <label for="access_days">Access days <span class="tiny muted">(0 = forever)</span></label>
                         <input id="access_days" name="access_days" type="number" min="0" max="3650" value="<?= e($values['access_days']) ?>" required>
