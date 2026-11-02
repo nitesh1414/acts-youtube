@@ -137,6 +137,66 @@
     /* --------------------------------------------------------------------- */
     /* Product selection (videos / bundles → checkout card)                   */
     /* --------------------------------------------------------------------- */
+    /**
+     * Show what the bundle alternative would cost (single video) or how much the
+     * bundle itself saves. Copied verbatim from data-* attributes so the wording
+     * matches the server-rendered version exactly.
+     */
+    function updateSaveHint(trigger) {
+        const hint = document.getElementById('save-hint');
+        if (!hint) { return; }
+
+        const attr = name => trigger.getAttribute(name) || '';
+        const set = (id, text) => {
+            const node = document.getElementById(id);
+            if (node) { node.textContent = text; }
+        };
+
+        const cta = document.getElementById('save-hint-cta');
+
+        const suggestId = attr('data-suggest-id');
+        const savingsPaise = Number(attr('data-savings') || 0);
+
+        if (suggestId) {
+            // A single video that lives inside a bundle: offer the upgrade, but
+            // never force it.
+            hint.hidden = false;
+            set('save-hint-badge-text', attr('data-suggest-badge'));
+            set('save-hint-title', attr('data-suggest-title'));
+            set('save-hint-text', attr('data-suggest-text'));
+            set('save-hint-note', attr('data-suggest-note'));
+            if (cta) {
+                cta.hidden = false;
+                cta.textContent = 'See the bundle';
+                cta.setAttribute('data-buy', '');
+                cta.setAttribute('data-type', attr('data-suggest-type') || 'bundle');
+                cta.setAttribute('data-id', suggestId);
+                cta.setAttribute('data-name', attr('data-suggest-name'));
+                cta.setAttribute('data-price', attr('data-suggest-price'));
+                cta.setAttribute('data-label', attr('data-suggest-label'));
+                cta.setAttribute('data-period', attr('data-suggest-period'));
+                // Switching back to a bundle keeps its own saving message.
+                cta.setAttribute('data-savings', attr('data-suggest-savings-paise') || '0');
+                cta.setAttribute('data-savings-badge', attr('data-suggest-savings-badge'));
+                cta.setAttribute('data-savings-title', attr('data-suggest-name'));
+                cta.setAttribute('data-savings-text', attr('data-suggest-text'));
+                cta.setAttribute('data-savings-note', 'One payment unlocks every video in the bundle.');
+            }
+            return;
+        }
+
+        if (savingsPaise > 0) {
+            hint.hidden = false;
+            set('save-hint-badge-text', attr('data-savings-badge'));
+            set('save-hint-title', attr('data-savings-title'));
+            set('save-hint-text', attr('data-savings-text'));
+            set('save-hint-note', attr('data-savings-note'));
+        } else {
+            hint.hidden = true;
+        }
+        if (cta) { cta.hidden = true; }
+    }
+
     function selectProduct(trigger) {
         const form = document.getElementById('payment-form');
         if (!form) { return; }
@@ -167,9 +227,12 @@
         if (periodNode) { periodNode.textContent = period ? '/ ' + period : ''; }
         if (buttonLabel) { buttonLabel.textContent = 'Pay ' + label + ' & unlock'; }
 
+        const key = type + ':' + id;
         document.querySelectorAll('[data-product-card]').forEach(function (card) {
-            card.classList.toggle('is-selected', card === trigger.closest('[data-product-card]'));
+            card.classList.toggle('is-selected', card.getAttribute('data-product-card') === key);
         });
+
+        updateSaveHint(trigger);
 
         // Keep the URL shareable: ?buy=video:3
         try {

@@ -426,13 +426,16 @@ function catalog_product($type, $id, $activeOnly = true)
             return null;
         }
         return [
-            'type'      => 'bundle',
-            'id'        => (int) $bundle['id'],
-            'name'      => (string) $bundle['name'],
-            'price'     => (float) $bundle['price'],
-            'videos'    => $bundle['videos'],
-            'thumbnail' => (string) $bundle['thumbnail'],
+            'type'        => 'bundle',
+            'id'          => (int) $bundle['id'],
+            'name'        => (string) $bundle['name'],
+            'price'       => (float) $bundle['price'],
+            'videos'      => $bundle['videos'],
+            'thumbnail'   => (string) $bundle['thumbnail'],
             'description' => (string) ($bundle['description'] ?? ''),
+            'single_total' => (float) $bundle['single_total'],
+            'savings'      => (float) $bundle['savings'],
+            'video_count'  => (int) $bundle['video_count'],
         ];
     }
 
@@ -578,12 +581,84 @@ function catalog_library_for_payment(array $payment)
 }
 
 /**
+ * Bundles that contain one video, cheapest first (tie-break: bigger saving).
+ *
+ * @param  array<string, mixed> $storefront
+ * @param  int                  $videoId
+ * @return array<int, array<string, mixed>>
+ */
+function catalog_bundles_for_video(array $storefront, $videoId)
+{
+    $videoId = (int) $videoId;
+    $matches = [];
+    foreach ($storefront['bundles'] as $bundle) {
+        if (in_array($videoId, $bundle['video_ids'], true)) {
+            $matches[] = $bundle;
+        }
+    }
+
+    usort($matches, function ($a, $b) {
+        if ((float) $a['price'] === (float) $b['price']) {
+            return (float) $b['savings'] <=> (float) $a['savings'];
+        }
+        return (float) $a['price'] <=> (float) $b['price'];
+    });
+
+    return $matches;
+}
+
+/**
+ * The bundle to offer someone who picked a single video ("you could also get
+ * these videos for …"), or null when that video is not in any bundle.
+ *
+ * @param  array<string, mixed> $storefront
+ * @param  int                  $videoId
+ * @return array<string, mixed>|null
+ */
+function catalog_best_bundle_for_video(array $storefront, $videoId)
+{
+    $bundles = catalog_bundles_for_video($storefront, $videoId);
+    return $bundles === [] ? null : $bundles[0];
+}
+
+/**
  * Best product to preselect on the landing page.
  *
  * @param  array<string, mixed>       $storefront
  * @param  string                     $requested "video:3" / "bundle:1"
  * @return array<string, mixed>|null
  */
+/**
+ * Normalise a storefront row (video or bundle) into the product shape the
+ * checkout uses, keeping the bundle economics for the savings message.
+ *
+ * @param  string                $type  video|bundle
+ * @param  array<string, mixed>  $item
+ * @return array<string, mixed>
+ */
+function catalog_product_from_item($type, array $item)
+{
+    $isBundle = $type === 'bundle';
+    $videos = $isBundle ? $item['videos'] : [$item];
+    $singleTotal = $isBundle
+        ? (float) $item['single_total']
+        : (float) $item['price'];
+    $price = (float) $item['price'];
+
+    return [
+        'type'        => $type,
+        'id'          => (int) $item['id'],
+        'name'        => (string) ($isBundle ? $item['name'] : $item['title']),
+        'price'       => $price,
+        'videos'      => $videos,
+        'thumbnail'   => (string) $item['thumbnail'],
+        'description' => (string) ($item['description'] ?? ''),
+        'video_count' => count($videos),
+        'single_total' => $singleTotal,
+        'savings'     => $isBundle ? max(0.0, $singleTotal - $price) : 0.0,
+    ];
+}
+
 function catalog_selected_product(array $storefront, $requested = '')
 {
     $requested = trim((string) $requested);
@@ -591,43 +666,17 @@ function catalog_selected_product(array $storefront, $requested = '')
         $type = strtolower($m[1]);
         foreach ($storefront[$type === 'video' ? 'videos' : 'bundles'] as $item) {
             if ((int) $item['id'] === (int) $m[2]) {
-                return [
-                    'type'        => $type,
-                    'id'          => (int) $item['id'],
-                    'name'        => (string) ($type === 'video' ? $item['title'] : $item['name']),
-                    'price'       => (float) $item['price'],
-                    'videos'      => $type === 'video' ? [$item] : $item['videos'],
-                    'thumbnail'   => (string) $item['thumbnail'],
-                    'description' => (string) ($item['description'] ?? ''),
-                ];
+                return catalog_product_from_item($type, $item);
             }
         }
     }
 
     if (!empty($storefront['videos'])) {
-        $video = $storefront['videos'][0];
-        return [
-            'type'        => 'video',
-            'id'          => (int) $video['id'],
-            'name'        => (string) $video['title'],
-            'price'       => (float) $video['price'],
-            'videos'      => [$video],
-            'thumbnail'   => (string) $video['thumbnail'],
-            'description' => (string) ($video['description'] ?? ''),
-        ];
+        return catalog_product_from_item('video', $storefront['videos'][0]);
     }
 
     if (!empty($storefront['bundles'])) {
-        $bundle = $storefront['bundles'][0];
-        return [
-            'type'        => 'bundle',
-            'id'          => (int) $bundle['id'],
-            'name'        => (string) $bundle['name'],
-            'price'       => (float) $bundle['price'],
-            'videos'      => $bundle['videos'],
-            'thumbnail'   => (string) $bundle['thumbnail'],
-            'description' => (string) ($bundle['description'] ?? ''),
-        ];
+        return catalog_product_from_item('bundle', $storefront['bundles'][0]);
     }
 
     return $storefront['legacy'] ?? null;

@@ -1,0 +1,18 @@
+{
+  "name": "payaccess-tests",
+  "private": true,
+  "type": "module",
+  "description": "Developer-only test harness for PayAccess: runs the real PHP entry points in Node via php-wasm against an in-memory fake database.",
+  "scripts": {
+    "lint": "node lint.mjs",
+    "pages": "node run-pages.mjs",
+    "schema": "node run-schema.mjs",
+    "db": "node run-db.mjs",
+    "html": "node check-html.mjs",
+    "schema-sql": "node run-tools.mjs",
+    "all": "node lint.mjs && node run-schema.mjs && node run-db.mjs && node run-pages.mjs && node check-html.mjs"
+  },
+  "dependencies": {
+    "php-wasm": "0.2.0"
+  }
+}

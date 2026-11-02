@@ -17,7 +17,7 @@ no build step, no Node.js required.
 4. [The admin panel](#4-the-admin-panel)
 5. [Uploading the logo (replaces the old "Logo URL" field)](#5-uploading-the-logo-replaces-the-old-logo-url-field)
 6. [Razorpay setup + webhooks](#6-razorpay-setup--webhooks)
-7. [How the money + access flow works](#7-how-the-money--access-flow-works) *(incl. videos, bundles, lifetime access)*
+7. [How the money + access flow works](#7-how-the-money--access-flow-works) *(incl. videos, bundles, bundle savings, lifetime access)*
 8. [Security model](#8-security-model)
 9. [File structure](#9-file-structure)
 10. [Database schema](#10-database-schema)
@@ -34,8 +34,14 @@ no build step, no Node.js required.
 
 **Public site**
 
-- Conversion-focused storefront: hero, **video library with a price per video**,
-  **named bundles** sold for one payment, FAQ and "how it works".
+- Conversion-focused storefront in this order: hero → **every video with its own price**
+  → **named bundles** sold for one payment → the checkout card → how it works → FAQ.
+  Visitors see the whole catalogue *before* the buying form.
+- **Bundle savings nudge**: if the video someone picked is also part of a bundle, the card
+  and the checkout say what the bundle contains, what it costs per video and how much it
+  saves ("₹399 for 2 videos · ₹199.50 each (₹498 separately)"), with a one-click
+  *Choose the bundle instead* button. The single video stays selectable — the buyer
+  decides; nothing is forced or auto-switched.
 - One checkout card for whichever video or bundle the visitor picked
   (`?buy=video:3` / `?buy=bundle:1` — shareable, works without JavaScript).
 - Checkout form (name, e-mail, mobile) with inline validation and a Razorpay popup.
@@ -224,6 +230,23 @@ Visitor                App                                  Razorpay
 - `success.php` refuses to render anything without a **valid, unexpired, successful** payment
   token — the page itself is not enough (this is the biggest difference from v1).
 
+### Videos, bundles and the savings nudge
+
+- Every video is its own product with its own price. A bundle is a *named* set of videos
+  sold for one payment; the name is what buyers see.
+- On the storefront each video card shows the cheapest bundle that contains it:
+  "Also in **Season One — Complete** — ₹399 for 2 videos, save ₹99".
+- Once a single video is selected, the checkout card explains the alternative
+  (price per video, total if bought separately, the saving) and offers
+  *Choose the bundle instead*. Selecting the bundle flips the message to the bundle's own
+  saving and points back to the single videos. With no JavaScript the same information is
+  server-rendered for the `?buy=` product.
+- The saving is always *relative to buying the videos separately*. A bundle that would cost
+  more than its parts cannot be created in the admin panel, and any bundle with a zero or
+  negative difference simply shows no "Save" badge.
+- Prices are re-read from the database in `api/create_order.php`; the client only sends
+  `item_type` + `item_id`, so the nudge can never be used to change what is charged.
+
 ### Lifetime access (v3 default)
 
 `settings.access_days = 0` (the default) means **no expiry**: `payments.access_expires_at`
@@ -316,6 +339,7 @@ existing lifetime purchases are never shortened by changing the setting.
 ├── storage/logs/             Application log
 ├── sql/schema.sql            Full schema + default row (generated — see note below)
 ├── tools/build-schema.php    Regenerates sql/schema.sql from lib/schema.php (dev only)
+├── tools/tests/              Developer test harness (php-wasm in Node; not needed in production)
 └── .htaccess                 Apache hardening (deny lib/sql/templates/storage, headers, caching)
 ```
 
@@ -538,37 +562,42 @@ admin with `update.php` (or let `install.php` add one). Old rows have no access 
 
 Because payments touch money, verify these after any change:
 
-1. **Storefront** — logo, one card per video with its own price, bundle cards with the
-   bundle name and savings, mobile layout (375 px), demo-mode banner.
-2. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
-3. **Product switch** — click *Buy video* on two different cards → the pay card and
+1. **Storefront** — logo; then every video card (own price) and every bundle card (name +
+   savings) *above* the checkout form; hero stats; mobile layout (375 px); demo-mode banner.
+2. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle: the checkout
+   box names the bundle, shows the per-video price, the total if bought separately and the
+   saving — and the pay button still shows the single-video price. Click *Choose the bundle
+   instead* → the box switches to the bundle and the pay button updates; click the single
+   video again → it switches back. Nothing is chosen automatically.
+3. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
+4. **Product switch** — click *Buy video* on two different cards → the pay card and
    `?buy=` URL update; reload the URL → the same product is preselected.
-4. **Payment (test keys)** — successful payment → redirect to the library → the bought
+5. **Payment (test keys)** — successful payment → redirect to the library → the bought
    video plays; a bundle shows every video in it.
-5. **Price tampering** — change `data-amount-paise`/the hidden `item_id` in DevTools → the
+6. **Price tampering** — change `data-amount-paise`/the hidden `item_id` in DevTools → the
    order is still created for the database price of the re-read product (check Razorpay
    dashboard / `payments.amount`).
-6. **Other videos stay locked** — a buyer of video 1 cannot open video 2 (their library
+7. **Other videos stay locked** — a buyer of video 1 cannot open video 2 (their library
    lists only what they paid for).
-7. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
-8. **Locked page** — open `/success.php` in a private window → the library is locked.
-9. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
+8. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
+9. **Locked page** — open `/success.php` in a private window → the library is locked.
+10. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
    access restored; wrong mobile → generic error; 7 attempts → rate-limit message.
-10. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
+11. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
     the admin payment page says "Lifetime access", and the CSV shows `Lifetime`.
-11. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
-12. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
+12. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
+13. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
     library of whoever bought it), delete a sold video → it is hidden, not erased.
-13. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
+14. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
     savings message), save, buy it, then remove a video from the bundle → the earlier buyer
     still sees it.
-14. **Filters** — search by partial e-mail and by **product name**, filter by status and date
+15. **Filters** — search by partial e-mail and by **product name**, filter by status and date
     range, sort each column, paginate, export CSV and open it in Excel.
-15. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
+16. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
    `.php` renamed to `.png` is rejected; 3 MB file is rejected; remove checkbox restores the mark.
-16. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
-17. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
-18. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
+17. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
+18. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
+19. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
     required", open `update.php` → items listed → Run the update → old payment still visible in
     *Admin → Payments*, old logo still shown, the old YouTube link became a priced video in
     *Admin → Videos*, old successful payments list that video under **Unlocked videos** →

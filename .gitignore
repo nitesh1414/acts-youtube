@@ -17,3 +17,8 @@
 Thumbs.db
 .idea/
 .vscode/
+
+# Developer test harness (see tools/tests/README.md)
+/tools/tests/node_modules/
+/tools/tests/out/
+/preview/
