@@ -45,14 +45,20 @@ seed_bundle($db);
         'id="pay-product-name"', 'name="item_type"', 'name="item_id"',
         'value="video"', 'value="1"', 'Save ', 'data-buy',
         'data-price="19900"', 'data-price="39900"',
-        'Step 1 · Choose', 'Step 2 · Pay', 'hero__stats',
+        'Start here · Bundles', 'Or buy a single video', 'Checkout', 'hero__stats',
     ],
     hasNot: ['Bonus — Behind the Scenes', 'Fatal error', 'Warning:', 'Notice:'],
     order: [
+        // every buying option comes before anything informational
+        ['hero__stats', 'id="bundles"'],
+        ['id="bundles"', 'id="library"'],
         ['id="library"', 'id="checkout"'],
         ['id="bundles"', 'id="checkout"'],
-        ['id="library"', 'id="bundles"'],
-        ['hero__stats', 'id="library"'],
+        ['id="checkout"', 'id="how"'],
+        ['id="checkout"', 'id="faq"'],
+        // the bundle cards themselves are rendered above the single videos
+        ['data-product-card="bundle:1"', 'data-product-card="video:1"'],
+        ['Season One — Complete</h3>', 'Episode One — The Beginning</h3>'],
     ],
 });
 

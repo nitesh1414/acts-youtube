@@ -34,9 +34,10 @@ no build step, no Node.js required.
 
 **Public site**
 
-- Conversion-focused storefront in this order: hero → **every video with its own price**
-  → **named bundles** sold for one payment → the checkout card → how it works → FAQ.
-  Visitors see the whole catalogue *before* the buying form.
+- Conversion-focused storefront in this order: hero → **named bundles** (best value, sold
+  for one payment) → **every video with its own price** → the checkout card → how it works
+  → FAQ. Every buying option is shown *before* anything informational, and bundles are
+  always listed above the single videos.
 - **Bundle savings nudge**: if the video someone picked is also part of a bundle, the card
   and the checkout say what the bundle contains, what it costs per video and how much it
   saves ("₹399 for 2 videos · ₹199.50 each (₹498 separately)"), with a one-click
@@ -234,13 +235,16 @@ Visitor                App                                  Razorpay
 
 - Every video is its own product with its own price. A bundle is a *named* set of videos
   sold for one payment; the name is what buyers see.
-- On the storefront each video card shows the cheapest bundle that contains it:
-  "Also in **Season One — Complete** — ₹399 for 2 videos, save ₹99".
+- The storefront lists bundles first, then all single videos. Each video card also shows
+  the cheapest bundle that contains it: "Also in **Season One — Complete** — ₹399 for
+  2 videos, save ₹99".
 - Once a single video is selected, the checkout card explains the alternative
   (price per video, total if bought separately, the saving) and offers
   *Choose the bundle instead*. Selecting the bundle flips the message to the bundle's own
   saving and points back to the single videos. With no JavaScript the same information is
   server-rendered for the `?buy=` product.
+- Nothing is preselected behind the buyer's back: the checkout starts on the first single
+  video, and only their click (or `?buy=`) changes what is charged.
 - The saving is always *relative to buying the videos separately*. A bundle that would cost
   more than its parts cannot be created in the admin panel, and any bundle with a zero or
   negative difference simply shows no "Save" badge.
@@ -562,8 +566,9 @@ admin with `update.php` (or let `install.php` add one). Old rows have no access 
 
 Because payments touch money, verify these after any change:
 
-1. **Storefront** — logo; then every video card (own price) and every bundle card (name +
-   savings) *above* the checkout form; hero stats; mobile layout (375 px); demo-mode banner.
+1. **Storefront** — logo; then **bundle cards first** (name + contents + saving), then every
+   video card (own price) — both *above* the checkout form; how it works and the FAQ only
+   after the form; hero stats; mobile layout (375 px); demo-mode banner.
 2. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle: the checkout
    box names the bundle, shows the per-video price, the total if bought separately and the
    saving — and the pay button still shows the single-video price. Click *Choose the bundle

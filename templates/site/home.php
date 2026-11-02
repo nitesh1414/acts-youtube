@@ -125,16 +125,22 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
             <li><?= icon('check-circle', 18) ?> Instant access right after payment</li>
             <li><?= icon('shield', 18) ?> Secure checkout — UPI, cards, netbanking &amp; wallets</li>
             <li><?= icon('clock', 18) ?> <?= e($accessNote) ?></li>
-            <li><?= icon('youtube', 18) ?> <?= $totalBundles > 0 ? 'Single videos or money-saving bundles' : 'Every video priced on its own' ?></li>
+            <li><?= icon('tag', 18) ?> <?= $totalBundles > 0 ? 'Money-saving bundles first, single videos too' : 'Every video priced on its own' ?></li>
         </ul>
 
         <div class="hero__actions">
             <?php if ($hasProducts): ?>
-                <a class="btn btn--primary" href="#library">
-                    <?= icon('play', 17) ?> Browse the videos
-                </a>
                 <?php if ($totalBundles > 0): ?>
-                    <a class="btn btn--ghost" href="#bundles"><?= icon('tag', 17) ?> See the bundles</a>
+                    <a class="btn btn--primary" href="#bundles">
+                        <?= icon('tag', 17) ?> See the bundles first
+                    </a>
+                    <a class="btn btn--ghost" href="#library">
+                        <?= icon('play', 17) ?> Browse all videos
+                    </a>
+                <?php else: ?>
+                    <a class="btn btn--primary" href="#library">
+                        <?= icon('play', 17) ?> Browse the videos
+                    </a>
                 <?php endif; ?>
             <?php endif; ?>
             <?php if ($access !== null): ?>
@@ -171,13 +177,79 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
     </div>
 </section>
 
-<?php if ($videos !== []): ?>
-    <section class="section" id="library">
+<?php if ($bundles !== []): ?>
+    <section class="section" id="bundles">
         <div class="wrap section__inner">
             <header class="section__head">
-                <span class="eyebrow">Step 1 · Choose</span>
+                <span class="eyebrow">Start here · Bundles</span>
+                <h2>More videos, one payment</h2>
+                <p>A <strong>named bundle</strong> is several videos sold together. Pay once and every video in it stays in your library — always cheaper than buying the same videos one by one, and the saving is printed on each bundle.</p>
+            </header>
+
+            <div class="bundles">
+                <?php foreach ($bundles as $bundle): ?>
+                    <?php $savings = (float) $bundle['savings']; ?>
+                    <article class="bundle-card" data-product-card="bundle:<?= (int) $bundle['id'] ?>">
+                        <div class="bundle-card__head">
+                            <div>
+                                <span class="chip chip--secure"><?= icon('tag', 13) ?> Bundle · <?= (int) $bundle['video_count'] ?> videos</span>
+                                <h3><?= e($bundle['name']) ?></h3>
+                                <?php if (trim((string) $bundle['description']) !== ''): ?>
+                                    <p class="muted small"><?= e($bundle['description']) ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div class="bundle-card__price">
+                                <span class="strong"><?= e(money((float) $bundle['price'], $currency)) ?></span>
+                                <?php if ($savings > 0): ?>
+                                    <span class="muted small"><s><?= e(money((float) $bundle['single_total'], $currency)) ?></s></span>
+                                    <span class="save-badge">Save <?= e(money($savings, $currency)) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <ul class="bundle-card__list">
+                            <?php foreach ($bundle['videos'] as $video): ?>
+                                <li>
+                                    <?= icon('play', 14) ?>
+                                    <span><?= e($video['title']) ?></span>
+                                    <span class="muted tiny"><?= e(money((float) $video['price'], $currency)) ?></span>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+
+                        <div class="bundle-card__foot">
+                            <span class="muted small">One payment · <?= $accessDays > 0 ? $accessDays . ' days' : 'lifetime' ?> access</span>
+                            <a class="btn btn--primary"
+                               href="<?= e(url('?buy=bundle:' . (int) $bundle['id'] . '#checkout')) ?>"
+                               data-buy
+                               data-type="bundle"
+                               data-id="<?= (int) $bundle['id'] ?>"
+                               data-name="<?= e($bundle['name']) ?>"
+                               data-price="<?= (int) round((float) $bundle['price'] * 100) ?>"
+                               data-label="<?= e(money((float) $bundle['price'], $currency)) ?>"
+                               data-period="<?= (int) $bundle['video_count'] ?> videos"
+                               data-savings="<?= (int) round($savings * 100) ?>"
+                               data-savings-badge="You save <?= e(money($savings, $currency)) ?>"
+                               data-savings-title="<?= e($bundle['name']) ?>"
+                               data-savings-text="<?= e(money((float) $bundle['price'], $currency)) ?> for <?= (int) $bundle['video_count'] ?> videos (<?= e(money((float) $bundle['single_total'], $currency)) ?> separately)"
+                               data-savings-note="One payment unlocks every video in the bundle — or pick a single video above if that suits you better.">
+                                Choose this bundle
+                            </a>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </section>
+<?php endif; ?>
+
+<?php if ($videos !== []): ?>
+    <section class="section section--muted" id="library">
+        <div class="wrap section__inner">
+            <header class="section__head">
+                <span class="eyebrow">Or buy a single video</span>
                 <h2>Every video, its own price</h2>
-                <p>Pick the one you want and pay only for that. If it is also part of a bundle, we show you the bundle price and what it saves — the decision stays yours.</p>
+                <p>Want just one? Each video is sold on its own — pay for that one and only that one is unlocked. If it is also part of a bundle we show you the bundle price and what it saves, so you can compare.</p>
             </header>
 
             <div class="catalog">
@@ -241,77 +313,11 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
     </section>
 <?php endif; ?>
 
-<?php if ($bundles !== []): ?>
-    <section class="section section--muted" id="bundles">
-        <div class="wrap section__inner">
-            <header class="section__head">
-                <span class="eyebrow">Bundles · better value</span>
-                <h2>More videos, one payment</h2>
-                <p>A bundle is a named set of videos sold together. Pay once and every video in it stays in your library. Bought separately they cost more — the saving is printed on each bundle.</p>
-            </header>
-
-            <div class="bundles">
-                <?php foreach ($bundles as $bundle): ?>
-                    <?php $savings = (float) $bundle['savings']; ?>
-                    <article class="bundle-card" data-product-card="bundle:<?= (int) $bundle['id'] ?>">
-                        <div class="bundle-card__head">
-                            <div>
-                                <span class="chip chip--secure"><?= icon('tag', 13) ?> Bundle · <?= (int) $bundle['video_count'] ?> videos</span>
-                                <h3><?= e($bundle['name']) ?></h3>
-                                <?php if (trim((string) $bundle['description']) !== ''): ?>
-                                    <p class="muted small"><?= e($bundle['description']) ?></p>
-                                <?php endif; ?>
-                            </div>
-                            <div class="bundle-card__price">
-                                <span class="strong"><?= e(money((float) $bundle['price'], $currency)) ?></span>
-                                <?php if ($savings > 0): ?>
-                                    <span class="muted small"><s><?= e(money((float) $bundle['single_total'], $currency)) ?></s></span>
-                                    <span class="save-badge">Save <?= e(money($savings, $currency)) ?></span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-
-                        <ul class="bundle-card__list">
-                            <?php foreach ($bundle['videos'] as $video): ?>
-                                <li>
-                                    <?= icon('play', 14) ?>
-                                    <span><?= e($video['title']) ?></span>
-                                    <span class="muted tiny"><?= e(money((float) $video['price'], $currency)) ?></span>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-
-                        <div class="bundle-card__foot">
-                            <span class="muted small">One payment · <?= $accessDays > 0 ? $accessDays . ' days' : 'lifetime' ?> access</span>
-                            <a class="btn btn--primary"
-                               href="<?= e(url('?buy=bundle:' . (int) $bundle['id'] . '#checkout')) ?>"
-                               data-buy
-                               data-type="bundle"
-                               data-id="<?= (int) $bundle['id'] ?>"
-                               data-name="<?= e($bundle['name']) ?>"
-                               data-price="<?= (int) round((float) $bundle['price'] * 100) ?>"
-                               data-label="<?= e(money((float) $bundle['price'], $currency)) ?>"
-                               data-period="<?= (int) $bundle['video_count'] ?> videos"
-                               data-savings="<?= (int) round($savings * 100) ?>"
-                               data-savings-badge="You save <?= e(money($savings, $currency)) ?>"
-                               data-savings-title="<?= e($bundle['name']) ?>"
-                               data-savings-text="<?= e(money((float) $bundle['price'], $currency)) ?> for <?= (int) $bundle['video_count'] ?> videos (<?= e(money((float) $bundle['single_total'], $currency)) ?> separately)"
-                               data-savings-note="One payment unlocks every video in the bundle — or pick a single video above if that suits you better.">
-                                Choose this bundle
-                            </a>
-                        </div>
-                    </article>
-                <?php endforeach; ?>
-            </div>
-        </div>
-    </section>
-<?php endif; ?>
-
 <?php if ($hasProducts): ?>
     <section class="section" id="checkout">
         <div class="wrap section__inner section__inner--narrow">
             <header class="section__head">
-                <span class="eyebrow">Step 2 · Pay</span>
+                <span class="eyebrow">Checkout</span>
                 <h2>Complete your purchase</h2>
                 <p>One payment. Your videos are added to a private library you can open again any time.</p>
             </header>
