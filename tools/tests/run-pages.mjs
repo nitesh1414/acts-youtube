@@ -150,6 +150,88 @@ seed_videos($db);
 
 const TOKEN = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
+// ---------------------------------------------------------------------------
+// Already purchased: bundles and the videos inside them show as owned
+// ---------------------------------------------------------------------------
+
+scenario('home-bundle-purchased', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';
+`, 'index.php', {
+    has: [
+        'bundle-card is-owned',
+        'chip--owned">', 'Purchased',
+        'Purchased — 2 of 2 videos in your library',
+        'Saved ₹99',
+        'id="owned-card"', 'You already own this', 'Already in your library',
+        'Watch now', 'Paid for — nothing more to pay',
+        '2 videos and 1 bundle are still on sale',
+        // the checkout opens on video 1, which came with the bundle
+        'You already own this video as part of a bundle',
+        'Included in <strong>Season One — Complete</strong>',
+        '2 owned',
+    ],
+    hasNot: [
+        'id="payment-form"', 'name="item_type"', 'Pay ₹',
+        'Choose this bundle', 'id="save-hint"',
+        'Fatal error', 'Warning:', 'Notice:',
+    ],
+});
+
+scenario('home-bundle-purchased-selected', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';
+`, 'index.php', {
+    has: [
+        'id="owned-card"',
+        'This bundle is already paid for — all 2 videos inside it are unlocked',
+        'Purchased — 2 of 2 videos in your library',
+    ],
+    hasNot: ['id="payment-form"', 'Choose this bundle', 'Fatal error', 'Warning:'],
+}, { get: { buy: 'bundle:1' }, query: '?buy=bundle:1' });
+
+scenario('home-single-video-owned', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db, ['product_type' => 'video', 'product_id' => 1, 'product_name' => 'Episode One — The Beginning', 'amount' => '199.00'], [1]);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';
+`, 'index.php', {
+    has: [
+        'id="owned-card"', 'You already paid for this video',
+        '1 owned',
+        // the bundle is still on sale and still nudges
+        'Choose this bundle',
+        'Buy this video',
+    ],
+    hasNot: [
+        'id="payment-form"', 'Purchased —', 'bundle-card is-owned',
+        'Fatal error', 'Warning:',
+    ],
+}, { get: { buy: 'video:1' }, query: '?buy=video:1' });
+
+scenario('home-owner-buys-missing-video', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db, ['product_type' => 'video', 'product_id' => 1, 'product_name' => 'Episode One — The Beginning', 'amount' => '199.00'], [1]);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';
+`, 'index.php', {
+    has: [
+        // the video they do not own is still sold normally
+        'id="payment-form"', 'id="pay-product-name">Episode Two — The Return',
+        'id="item-id" value="2"', 'data-amount-paise="29900"', 'Pay ₹299',
+        'Episode One — The Beginning',
+    ],
+    hasNot: ['id="owned-card"', 'Fatal error', 'Warning:'],
+}, { get: { buy: 'video:2' }, query: '?buy=video:2' });
+
 scenario('library-bundle', `
 seed_videos($db);
 seed_bundle($db);

@@ -325,6 +325,79 @@ $names = array_values(array_filter(array_map(function ($row) {
 check(in_array('Pair', $names, true), 'export includes the product name: ' . json_encode($names));
 
 // ---------------------------------------------------------------------------
+// Purchased state: a bundle marks itself and every video inside it as owned
+// ---------------------------------------------------------------------------
+reset_data();
+$db = fake_db();
+$catalog = app()->catalog;
+$ep1 = $catalog->createVideo(['title' => 'Ep 1', 'description' => '', 'youtube_url' => 'https://youtu.be/aaaaaaaaaaa', 'price' => 199, 'position' => 1, 'is_active' => true]);
+$ep2 = $catalog->createVideo(['title' => 'Ep 2', 'description' => '', 'youtube_url' => 'https://youtu.be/bbbbbbbbbbb', 'price' => 299, 'position' => 2, 'is_active' => true]);
+$season = $catalog->createBundle(['name' => 'Season One', 'description' => '', 'price' => 399, 'position' => 1, 'is_active' => true], [$ep1, $ep2]);
+$payments = app()->payments;
+$buyer = ['user_name' => 'Owner Buyer', 'user_email' => 'owner@example.com', 'user_mobile' => '9222222222'];
+
+$empty = catalog_owned_state(null);
+check($empty['videos'] === [] && $empty['bundles'] === [] && $empty['covered'] === [], 'anonymous visitors own nothing');
+
+$bundlePay = $payments->create(array_merge($buyer, [
+    'order_id' => 'order_o1', 'amount' => 399, 'currency' => 'INR',
+    'product_type' => 'bundle', 'product_id' => $season, 'product_name' => 'Season One',
+]));
+$payments->markSuccess($bundlePay, ['payment_id' => 'pay_o1', 'method' => 'upi']);
+catalog_grant_for_payment($payments->find($bundlePay));
+
+$state = catalog_owned_state($payments->find($bundlePay));
+sort($state['videos']);
+check($state['videos'] === [$ep1, $ep2], 'bundle purchase owns every video in it: ' . json_encode($state['videos']));
+check($state['bundles'] === [$season], 'the bundle itself is reported as purchased');
+check($state['covered'] === [$season], 'a bought bundle also counts as covered');
+
+// Buying one of the videos separately must not mark the bundle as purchased.
+$singleBuyer = ['user_name' => 'Single Buyer', 'user_email' => 'one@example.com', 'user_mobile' => '9333333333'];
+$singlePay = $payments->create(array_merge($singleBuyer, [
+    'order_id' => 'order_o2', 'amount' => 199, 'currency' => 'INR',
+    'product_type' => 'video', 'product_id' => $ep1, 'product_name' => 'Ep 1',
+]));
+$payments->markSuccess($singlePay, ['payment_id' => 'pay_o2', 'method' => 'upi']);
+catalog_grant_for_payment($payments->find($singlePay));
+
+$state = catalog_owned_state($payments->find($singlePay));
+check($state['videos'] === [$ep1], 'single video purchase owns exactly that video');
+check($state['bundles'] === [], 'the bundle is still on sale');
+check($state['covered'] === [], 'a partly-owned bundle is not covered');
+
+// Buy the rest separately: now the bundle is fully owned, but never "purchased".
+$secondPay = $payments->create(array_merge($singleBuyer, [
+    'order_id' => 'order_o3', 'amount' => 299, 'currency' => 'INR',
+    'product_type' => 'video', 'product_id' => $ep2, 'product_name' => 'Ep 2',
+]));
+$payments->markSuccess($secondPay, ['payment_id' => 'pay_o3', 'method' => 'upi']);
+catalog_grant_for_payment($payments->find($secondPay));
+
+$state = catalog_owned_state($payments->find($secondPay));
+sort($state['videos']);
+check($state['videos'] === [$ep1, $ep2], 'library merges both single purchases');
+check($state['bundles'] === [], 'owning the videos separately does not fake a bundle purchase');
+check($state['covered'] === [$season], 'a fully-owned bundle is marked covered');
+
+// A failed payment never grants ownership.
+$failedBuyer = ['user_name' => 'Failed Buyer', 'user_email' => 'failed@example.com', 'user_mobile' => '9444444444'];
+$failedPay = $payments->create(array_merge($failedBuyer, [
+    'order_id' => 'order_o4', 'amount' => 399, 'currency' => 'INR',
+    'product_type' => 'bundle', 'product_id' => $season, 'product_name' => 'Season One',
+]));
+$payments->markFailed($failedPay, 'card declined by the bank');
+$state = catalog_owned_state($payments->find($failedPay));
+check($state['videos'] === [] && $state['bundles'] === [], 'a failed payment owns nothing');
+
+// The storefront renders those states (and never a pay form for an owned item).
+$home = (string) file_get_contents('/app/templates/site/home.php');
+check(strpos($home, 'catalog_owned_state(') !== false, 'storefront reads the owned state');
+check(strpos($home, 'owned-card') !== false, 'owned products get their own panel instead of the pay form');
+check(strpos($home, 'Purchased') !== false, 'purchased bundles are labelled');
+check(strpos($home, '$selectedOwned') !== false && strpos($home, 'id="payment-form"') !== false, 'the pay form only renders for products that are not owned');
+
+// ---------------------------------------------------------------------------
 // Safety: the checkout price always comes from the database
 // ---------------------------------------------------------------------------
 $createOrder = (string) file_get_contents('/app/api/create_order.php');
@@ -343,6 +416,14 @@ check(strpos($webhook, 'catalog_grant_for_payment(') !== false, 'webhook grants 
 $home = (string) file_get_contents('/app/templates/site/home.php');
 check(strpos($home, 'catalog_best_bundle_for_video(') !== false, 'storefront offers bundles per video');
 check(strpos($home, "data-price=") !== false, 'cards carry the price for the client-side switcher');
+
+// An owned page has no pay form, so the buy links must keep working as plain
+// links there (the client-side switcher would otherwise swallow the click).
+$appjs = (string) file_get_contents('/app/assets/js/app.js');
+check(
+    strpos($appjs, "if (!document.getElementById('payment-form')) { return; }") !== false,
+    'buy links still navigate when no pay form is rendered'
+);
 
 // ---------------------------------------------------------------------------
 echo $pass . " passed, " . count($fail) . " failed\n";

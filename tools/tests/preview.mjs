@@ -60,6 +60,13 @@ $db->tables['payments'][0]['access_token'] = '${TOKEN}';
 await render('home', 'seed_videos($db); seed_bundle($db);', 'index.php');
 await render('home-buy-video', 'seed_videos($db); seed_bundle($db);', 'index.php', { buy: 'video:1' });
 await render('home-buy-bundle', 'seed_videos($db); seed_bundle($db);', 'index.php', { buy: 'bundle:1' });
+
+const buyer = `seed_videos($db); seed_bundle($db);
+seed_payment($db);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';`;
+await render('home-purchased', buyer, 'index.php');
+await render('home-purchased-bundle', buyer, 'index.php', { buy: 'bundle:1' });
 await render('library', library, 'success.php', { t: TOKEN });
 await render('admin-videos', 'seed_videos($db); seed_bundle($db); seed_payment($db); fake_login();', 'admin/videos.php');
 await render('admin-bundles', 'seed_videos($db); seed_bundle($db); fake_login();', 'admin/bundles.php');

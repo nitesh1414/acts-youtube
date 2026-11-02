@@ -581,6 +581,90 @@ function catalog_library_for_payment(array $payment)
 }
 
 /**
+ * Every successful purchase of the same buyer (same e-mail + mobile), oldest
+ * first. An access token belongs to one payment, but a library belongs to the
+ * person: buying a bundle and later a single video must merge.
+ *
+ * @param  array<string, mixed> $payment
+ * @return array<int, array<string, mixed>>
+ */
+function catalog_buyer_payments($payment)
+{
+    if (!is_array($payment)) {
+        return [];
+    }
+
+    // A pending or failed payment must never make anything look bought.
+    if (isset($payment['status']) && (string) $payment['status'] !== Payments::STATUS_SUCCESS) {
+        return [];
+    }
+
+    $payments = app()->payments->allSuccessfulFor(
+        isset($payment['user_email']) ? (string) $payment['user_email'] : '',
+        isset($payment['user_mobile']) ? (string) $payment['user_mobile'] : ''
+    );
+
+    return $payments === [] ? [$payment] : $payments;
+}
+
+/**
+ * What a visitor already owns, as id sets the storefront can test.
+ *
+ * A bundle purchase unlocks every video inside it, so those single-video cards
+ * are marked owned too; and a bundle whose videos were all bought separately is
+ * reported as "covered" so it is never sold twice.
+ *
+ * @param  array<string, mixed>|null $payment  current access payment (or null)
+ * @return array{videos: array<int, int>, bundles: array<int, int>, covered: array<int, int>}
+ *         videos  — every video id in the buyer's library
+ *         bundles — bundle ids that were bought as a bundle
+ *         covered — bundle ids whose every video is already in the library
+ */
+function catalog_owned_state($payment)
+{
+    $state = ['videos' => [], 'bundles' => [], 'covered' => []];
+    if (!is_array($payment)) {
+        return $state;
+    }
+
+    $videos = [];
+    $bundles = [];
+    foreach (catalog_buyer_payments($payment) as $row) {
+        foreach (catalog_videos_for_payment($row) as $video) {
+            $videos[(int) $video['id']] = true;
+        }
+
+        $type = isset($row['product_type']) ? strtolower((string) $row['product_type']) : '';
+        $id = isset($row['product_id']) ? (int) $row['product_id'] : 0;
+        if ($type === 'bundle' && $id > 0) {
+            $bundles[$id] = true;
+        }
+    }
+
+    $state['videos'] = array_keys($videos);
+    $state['bundles'] = array_keys($bundles);
+
+    foreach (app()->catalog->bundles(false) as $bundle) {
+        $ids = array_map('intval', $bundle['video_ids']);
+        if ($ids === []) {
+            continue;
+        }
+        $ownsAll = true;
+        foreach ($ids as $id) {
+            if (!isset($videos[$id])) {
+                $ownsAll = false;
+                break;
+            }
+        }
+        if ($ownsAll) {
+            $state['covered'][] = (int) $bundle['id'];
+        }
+    }
+
+    return $state;
+}
+
+/**
  * Bundles that contain one video, cheapest first (tie-break: bigger saving).
  *
  * @param  array<string, mixed> $storefront

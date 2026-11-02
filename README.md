@@ -45,6 +45,10 @@ no build step, no Node.js required.
   decides; nothing is forced or auto-switched.
 - One checkout card for whichever video or bundle the visitor picked
   (`?buy=video:3` / `?buy=bundle:1` — shareable, works without JavaScript).
+- **Purchased state**: a bundle a buyer already paid for is labelled *Purchased* and every
+  single video inside it is marked *Owned*, because that video is in their library. Picking
+  something they own shows a "You already own this — Watch now" panel instead of the pay
+  form, so nobody is ever charged twice by accident.
 - Checkout form (name, e-mail, mobile) with inline validation and a Razorpay popup.
 - **Private library** after payment: every video the purchase unlocked, with an in-page
   player and a receipt (`success.php?t=…&v=3`). Opening it again later just works —
@@ -250,6 +254,27 @@ Visitor                App                                  Razorpay
   negative difference simply shows no "Save" badge.
 - Prices are re-read from the database in `api/create_order.php`; the client only sends
   `item_type` + `item_id`, so the nudge can never be used to change what is charged.
+
+### Purchased state (bundle → all its videos)
+
+`catalog_owned_state($payment)` turns the visitor's library into three id lists, and the
+storefront reads all three:
+
+| Key | Meaning | Shown as |
+| --- | --- | --- |
+| `videos` | every video unlocked by any of the buyer's successful payments | the *Owned* badge and a **Watch** button on the video card |
+| `bundles` | bundles bought **as a bundle** | *Purchased* chip + "Purchased — 2 of 2 videos in your library" |
+| `covered` | bundles whose **every** video was bought separately | *All videos owned* (never sold again, but not called "purchased") |
+
+Because a bundle payment unlocks each of its videos in `payment_videos`, buying
+"Season One — Complete" makes the bundle card read *Purchased* **and** marks every single
+video inside it *Owned* on the video cards. Purchases from earlier visits are merged
+(matching e-mail + mobile), and a pending or failed payment never grants ownership.
+
+If the product the page opens on is already owned, the checkout renders an
+`owned-card` — "You already own this", the reason (bought on its own / part of a bundle /
+the whole bundle), **Watch now** and **Open my library** — and no `#payment-form` at all.
+Buy links stay plain links in that state so picking something new reloads with `?buy=`.
 
 ### Lifetime access (v3 default)
 
@@ -569,40 +594,45 @@ Because payments touch money, verify these after any change:
 1. **Storefront** — logo; then **bundle cards first** (name + contents + saving), then every
    video card (own price) — both *above* the checkout form; how it works and the FAQ only
    after the form; hero stats; mobile layout (375 px); demo-mode banner.
-2. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle: the checkout
+2. **Purchased state** — buy a bundle, then reopen the storefront: the bundle card says
+   *Purchased* (and *Saved ₹99*), every video inside it says *Owned* with a **Watch** button,
+   and `?buy=video:1` / `?buy=bundle:1` show the "You already own this" panel with no pay
+   form. Buy one single video only → that card is *Owned*, the bundle still offers
+   *Choose this bundle*, and the other video still sells normally.
+3. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle: the checkout
    box names the bundle, shows the per-video price, the total if bought separately and the
    saving — and the pay button still shows the single-video price. Click *Choose the bundle
    instead* → the box switches to the bundle and the pay button updates; click the single
    video again → it switches back. Nothing is chosen automatically.
-3. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
-4. **Product switch** — click *Buy video* on two different cards → the pay card and
+4. **Validation** — empty form, bad e-mail, 3-digit mobile → inline errors, no order created.
+5. **Product switch** — click *Buy video* on two different cards → the pay card and
    `?buy=` URL update; reload the URL → the same product is preselected.
-5. **Payment (test keys)** — successful payment → redirect to the library → the bought
+6. **Payment (test keys)** — successful payment → redirect to the library → the bought
    video plays; a bundle shows every video in it.
-6. **Price tampering** — change `data-amount-paise`/the hidden `item_id` in DevTools → the
+7. **Price tampering** — change `data-amount-paise`/the hidden `item_id` in DevTools → the
    order is still created for the database price of the re-read product (check Razorpay
    dashboard / `payments.amount`).
-7. **Other videos stay locked** — a buyer of video 1 cannot open video 2 (their library
+8. **Other videos stay locked** — a buyer of video 1 cannot open video 2 (their library
    lists only what they paid for).
-8. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
-9. **Locked page** — open `/success.php` in a private window → the library is locked.
-10. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
+9. **Signature** — tamper with `razorpay_signature` (DevTools) → API returns an error, no access.
+10. **Locked page** — open `/success.php` in a private window → the library is locked.
+11. **Restore** — clear cookies, visit `/restore.php`, enter the same e-mail + mobile →
    access restored; wrong mobile → generic error; 7 attempts → rate-limit message.
-11. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
+12. **Lifetime** — *Site settings → Access duration* = 0 → pay → the receipt says "no expiry",
     the admin payment page says "Lifetime access", and the CSV shows `Lifetime`.
-12. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
-13. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
+13. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
+14. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
     library of whoever bought it), delete a sold video → it is hidden, not erased.
-14. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
+15. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
     savings message), save, buy it, then remove a video from the bundle → the earlier buyer
     still sees it.
-15. **Filters** — search by partial e-mail and by **product name**, filter by status and date
+16. **Filters** — search by partial e-mail and by **product name**, filter by status and date
     range, sort each column, paginate, export CSV and open it in Excel.
-16. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
+17. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
    `.php` renamed to `.png` is rejected; 3 MB file is rejected; remove checkbox restores the mark.
-17. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
-18. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
-19. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
+18. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
+19. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
+20. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
     required", open `update.php` → items listed → Run the update → old payment still visible in
     *Admin → Payments*, old logo still shown, the old YouTube link became a priced video in
     *Admin → Videos*, old successful payments list that video under **Unlocked videos** →

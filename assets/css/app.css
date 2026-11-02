@@ -916,6 +916,24 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .bundle-card__list li { display: flex; align-items: center; gap: 8px; font-size: .88rem; color: #cbd5e1; }
 .bundle-card__list .icon { color: var(--muted); flex: none; }
 .bundle-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 4px; }
+/* Purchased / owned state: bundles and the videos inside them */
+.chip--owned {
+    color: var(--ok-text); border-color: rgba(16, 185, 129, .38);
+    background: rgba(16, 185, 129, .14);
+}
+.bundle-card__head .chip + .chip { margin-left: 6px; }
+.bundle-card.is-owned {
+    border-color: rgba(16, 185, 129, .38);
+    background: linear-gradient(160deg, rgba(16, 185, 129, .12), rgba(15, 23, 42, .2));
+}
+.bundle-card__list li.is-owned { color: #a7f3d0; }
+.bundle-card__list li.is-owned .icon { color: var(--ok-text); }
+.bundle-card__tick {
+    display: inline-flex; align-items: center; gap: 4px; margin-left: auto;
+    font-size: .7rem; font-weight: 700; letter-spacing: .02em; color: var(--ok-text);
+}
+.bundle-card__tick .icon { color: var(--ok-text); }
+
 .save-badge {
     display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px;
     font-size: .72rem; font-weight: 700; letter-spacing: .01em;
@@ -932,6 +950,12 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .vcard__bundle .icon { margin-top: 2px; flex: none; }
 .vcard__bundle strong { color: #e0e7ff; }
 .vcard__bundle:hover { background: rgba(99, 102, 241, .2); color: #e0e7ff; }
+.vcard__owned-note {
+    display: flex; align-items: center; gap: 6px; margin: 2px 0 4px;
+    font-size: .78rem; color: var(--ok-text);
+}
+.vcard__owned-note .icon { flex: none; }
+.vcard__owned-note strong { color: #a7f3d0; }
 
 /* "You could save…" box on the checkout card */
 .save-hint {
@@ -952,6 +976,17 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .save-hint__text { margin: 0; font-size: .84rem; color: #cbd5e1; }
 .save-hint__note { margin: 0; }
 .save-hint__cta { grid-column: 2; justify-self: start; margin-top: 4px; }
+
+/* "You already own this" panel instead of the pay form */
+.owned-card {
+    display: grid; gap: 12px; justify-items: start;
+    border-color: rgba(16, 185, 129, .34);
+    background: linear-gradient(160deg, rgba(16, 185, 129, .12), rgba(15, 23, 42, .2));
+}
+.owned-card h3 { margin: 0; font-size: 1.2rem; }
+.owned-card p { margin: 0; }
+.owned-card .form__foot { margin: 0; }
+.owned-card__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
 
 /* Buyer library (success page) */
 .library { display: grid; gap: 16px; margin-top: 8px; }

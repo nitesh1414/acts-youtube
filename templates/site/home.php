@@ -26,12 +26,11 @@ $totalVideos = count($videos);
 $totalBundles = count($bundles);
 
 $access = current_access_payment();
-$ownedIds = [];
-if ($access !== null) {
-    foreach (catalog_videos_for_payment($access) as $ownedVideo) {
-        $ownedIds[] = (int) $ownedVideo['id'];
-    }
-}
+$ownedState = catalog_owned_state($access);
+$ownedVideos = array_fill_keys($ownedState['videos'], true);    // video id => true
+$ownedBundles = array_fill_keys($ownedState['bundles'], true);  // bought as a bundle
+$coveredBundles = array_fill_keys($ownedState['covered'], true); // every video already owned
+$ownedCount = count($ownedVideos);
 
 $accessNote = $accessDays > 0
     ? 'Watch anytime for ' . $accessDays . ' day' . ($accessDays === 1 ? '' : 's')
@@ -55,6 +54,28 @@ foreach ($videos as $video) {
     if ($bundle !== null) {
         $bestBundle[(int) $video['id']] = $bundle;
     }
+}
+
+// A buyer can land on a product they already paid for (bookmark, refresh,
+// second visit). Selling it again would take their money for nothing.
+$selectedOwned = false;
+$selectedViaBundle = false;
+if ($selected !== null) {
+    $selectedId = (int) $selected['id'];
+    if ($selected['type'] === 'bundle') {
+        $selectedOwned = isset($ownedBundles[$selectedId]) || isset($coveredBundles[$selectedId]);
+    } else {
+        $selectedOwned = isset($ownedVideos[$selectedId]);
+        if ($selectedOwned && isset($bestBundle[$selectedId])) {
+            // Owned because of a bundle rather than bought on its own?
+            $ownerBundleId = (int) $bestBundle[$selectedId]['id'];
+            $selectedViaBundle = isset($ownedBundles[$ownerBundleId]) || isset($coveredBundles[$ownerBundleId]);
+        }
+    }
+}
+$selectedWatchId = 0;
+if ($selected !== null && $selected['videos'] !== []) {
+    $selectedWatchId = (int) $selected['videos'][0]['id'];
 }
 
 $priceLabel = $selected !== null ? money((float) $selected['price'], $currency) : '';
@@ -172,6 +193,12 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                     <dt><?= icon('clock', 15) ?> Access</dt>
                     <dd class="hero__stats-text"><?= $accessDays > 0 ? $accessDays . ' days' : 'No expiry' ?></dd>
                 </div>
+                <?php if ($ownedCount > 0): ?>
+                    <div>
+                        <dt><?= icon('check-circle', 15) ?> Yours</dt>
+                        <dd class="hero__stats-text"><?= $ownedCount ?> owned</dd>
+                    </div>
+                <?php endif; ?>
             </dl>
         <?php endif; ?>
     </div>
@@ -188,11 +215,29 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
 
             <div class="bundles">
                 <?php foreach ($bundles as $bundle): ?>
-                    <?php $savings = (float) $bundle['savings']; ?>
-                    <article class="bundle-card" data-product-card="bundle:<?= (int) $bundle['id'] ?>">
+                    <?php
+                    $savings = (float) $bundle['savings'];
+                    $bundleId = (int) $bundle['id'];
+                    $bundleBought = isset($ownedBundles[$bundleId]);
+                    $bundleCovered = isset($coveredBundles[$bundleId]);
+                    $bundleYours = $bundleBought || $bundleCovered;
+                    $bundleVideosOwned = 0;
+                    foreach ($bundle['videos'] as $bundleVideo) {
+                        if (isset($ownedVideos[(int) $bundleVideo['id']])) {
+                            $bundleVideosOwned++;
+                        }
+                    }
+                    $bundleWatchId = $bundle['videos'] !== [] ? (int) $bundle['videos'][0]['id'] : 0;
+                    ?>
+                    <article class="bundle-card <?= $bundleYours ? 'is-owned' : '' ?>" data-product-card="bundle:<?= $bundleId ?>">
                         <div class="bundle-card__head">
                             <div>
                                 <span class="chip chip--secure"><?= icon('tag', 13) ?> Bundle · <?= (int) $bundle['video_count'] ?> videos</span>
+                                <?php if ($bundleBought): ?>
+                                    <span class="chip chip--owned"><?= icon('check', 13) ?> Purchased</span>
+                                <?php elseif ($bundleCovered): ?>
+                                    <span class="chip chip--owned"><?= icon('check', 13) ?> All videos owned</span>
+                                <?php endif; ?>
                                 <h3><?= e($bundle['name']) ?></h3>
                                 <?php if (trim((string) $bundle['description']) !== ''): ?>
                                     <p class="muted small"><?= e($bundle['description']) ?></p>
@@ -202,21 +247,40 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                                 <span class="strong"><?= e(money((float) $bundle['price'], $currency)) ?></span>
                                 <?php if ($savings > 0): ?>
                                     <span class="muted small"><s><?= e(money((float) $bundle['single_total'], $currency)) ?></s></span>
-                                    <span class="save-badge">Save <?= e(money($savings, $currency)) ?></span>
+                                    <span class="save-badge"><?= $bundleBought ? 'Saved ' : 'Save ' ?><?= e(money($savings, $currency)) ?></span>
                                 <?php endif; ?>
                             </div>
                         </div>
 
                         <ul class="bundle-card__list">
                             <?php foreach ($bundle['videos'] as $video): ?>
-                                <li>
+                                <?php $rowOwned = isset($ownedVideos[(int) $video['id']]); ?>
+                                <li class="<?= $rowOwned ? 'is-owned' : '' ?>">
                                     <?= icon('play', 14) ?>
                                     <span><?= e($video['title']) ?></span>
-                                    <span class="muted tiny"><?= e(money((float) $video['price'], $currency)) ?></span>
+                                    <?php if ($rowOwned): ?>
+                                        <span class="bundle-card__tick"><?= icon('check', 12) ?> Owned</span>
+                                    <?php else: ?>
+                                        <span class="muted tiny"><?= e(money((float) $video['price'], $currency)) ?></span>
+                                    <?php endif; ?>
                                 </li>
                             <?php endforeach; ?>
                         </ul>
 
+                        <?php if ($bundleYours): ?>
+                            <div class="bundle-card__foot">
+                                <span class="muted small">
+                                    <?php if ($bundleBought): ?>
+                                        Purchased — <?= $bundleVideosOwned ?> of <?= (int) $bundle['video_count'] ?> videos in your library
+                                    <?php else: ?>
+                                        All <?= (int) $bundle['video_count'] ?> videos are already in your library
+                                    <?php endif; ?>
+                                </span>
+                                <a class="btn btn--primary" href="<?= e(url('success.php?v=' . $bundleWatchId)) ?>">
+                                    <?= icon('play', 16) ?> Watch
+                                </a>
+                            </div>
+                        <?php else: ?>
                         <div class="bundle-card__foot">
                             <span class="muted small">One payment · <?= $accessDays > 0 ? $accessDays . ' days' : 'lifetime' ?> access</span>
                             <a class="btn btn--primary"
@@ -236,6 +300,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                                 Choose this bundle
                             </a>
                         </div>
+                        <?php endif; ?>
                     </article>
                 <?php endforeach; ?>
             </div>
@@ -256,8 +321,12 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                 <?php foreach ($videos as $video): ?>
                     <?php
                     $videoId = (int) $video['id'];
-                    $owned = in_array($videoId, $ownedIds, true);
+                    $owned = isset($ownedVideos[$videoId]);
                     $bundle = isset($bestBundle[$videoId]) ? $bestBundle[$videoId] : null;
+                    $bundleYours = false;
+                    if ($owned && $bundle !== null) {
+                        $bundleYours = isset($ownedBundles[(int) $bundle['id']]) || isset($coveredBundles[(int) $bundle['id']]);
+                    }
                     ?>
                     <article class="vcard <?= $owned ? 'is-owned' : '' ?>" data-product-card="video:<?= $videoId ?>">
                         <div class="vcard__thumb">
@@ -277,7 +346,12 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                                 <p class="muted small"><?= e(text_limit((string) $video['description'], 130)) ?></p>
                             <?php endif; ?>
 
-                            <?php if ($bundle !== null): ?>
+                            <?php if ($owned && $bundleYours): ?>
+                                <p class="vcard__owned-note">
+                                    <?= icon('check', 13) ?>
+                                    Included in <strong><?= e($bundle['name']) ?></strong>
+                                </p>
+                            <?php elseif ($bundle !== null): ?>
                                 <a class="vcard__bundle" href="#bundles">
                                     <?= icon('tag', 13) ?>
                                     <span>
@@ -317,11 +391,52 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
     <section class="section" id="checkout">
         <div class="wrap section__inner section__inner--narrow">
             <header class="section__head">
-                <span class="eyebrow">Checkout</span>
-                <h2>Complete your purchase</h2>
-                <p>One payment. Your videos are added to a private library you can open again any time.</p>
+                <?php if ($selectedOwned): ?>
+                    <span class="eyebrow">Your library</span>
+                    <h2>You already own this</h2>
+                    <p>Nothing to pay here. Open it any time, from any device — or pick something new above.</p>
+                <?php else: ?>
+                    <span class="eyebrow">Checkout</span>
+                    <h2>Complete your purchase</h2>
+                    <p>One payment. Your videos are added to a private library you can open again any time.</p>
+                <?php endif; ?>
             </header>
 
+            <?php if ($selectedOwned): ?>
+                <div class="card card--pad owned-card" id="owned-card">
+                    <span class="chip chip--owned"><?= icon('check', 13) ?> Already in your library</span>
+                    <h3><?= e($selected['name']) ?></h3>
+                    <p class="muted">
+                        <?php if ($selected['type'] === 'bundle'): ?>
+                            This bundle is already paid for — all <?= (int) $videoCount ?> videos inside it are unlocked.
+                            You do not need to buy it again.
+                        <?php elseif ($selectedViaBundle): ?>
+                            You already own this video as part of a bundle. You do not need to buy it again.
+                        <?php else: ?>
+                            You already paid for this video. You do not need to buy it again.
+                        <?php endif; ?>
+                        <?php if ($accessDays > 0): ?>
+                            Access stays open for <?= $accessDays ?> days from the payment date.
+                        <?php else: ?>
+                            Your access does not expire.
+                        <?php endif; ?>
+                    </p>
+                    <div class="owned-card__actions">
+                        <?php if ($selectedWatchId > 0): ?>
+                            <a class="btn btn--primary" href="<?= e(url('success.php?v=' . $selectedWatchId)) ?>">
+                                <?= icon('play', 17) ?> Watch now
+                            </a>
+                        <?php endif; ?>
+                        <a class="btn btn--ghost" href="<?= e(url('success.php')) ?>">
+                            <?= icon('eye', 17) ?> Open my library
+                        </a>
+                    </div>
+                    <p class="form__foot">
+                        <?= icon('shield', 15) ?>
+                        Paid for — nothing more to pay. <?= $totalVideos ?> video<?= $totalVideos === 1 ? '' : 's' ?> and <?= $totalBundles ?> bundle<?= $totalBundles === 1 ? '' : 's' ?> are still on sale above.
+                    </p>
+                </div>
+            <?php else: ?>
             <div class="checkout">
                 <div class="card card--pad paycard">
                     <div class="paycard__head">
@@ -468,6 +583,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                     <span><?= icon('refresh', 16) ?> Restore any time</span>
                 </div>
             </div>
+            <?php endif; ?>
         </div>
     </section>
 <?php endif; ?>

@@ -254,6 +254,10 @@
     document.addEventListener('click', function (event) {
         const trigger = event.target.closest('[data-buy]');
         if (!trigger) { return; }
+        // When the product on screen is already owned there is no pay form to
+        // update — let the browser follow the link to ?buy=video:N so the page
+        // re-renders with the checkout for the item they picked.
+        if (!document.getElementById('payment-form')) { return; }
         // Without JavaScript the link still works: it reloads with ?buy=type:id.
         event.preventDefault();
         selectProduct(trigger);
