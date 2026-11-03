@@ -236,6 +236,45 @@ check($catalog->video($v1) !== null, 'purchased video is hidden, not deleted');
 check((int) $catalog->video($v1)['is_active'] === 0, 'purchased video was set inactive');
 check(count(catalog_videos_for_payment($payments->find($paymentId))) === 2, 'hidden past purchase still plays');
 
+// --- editing a bundle reaches the people who already bought it -------------
+$v3b = $catalog->createVideo(['title' => 'Three', 'description' => '', 'youtube_url' => 'https://youtu.be/ccccccccccc', 'price' => 100, 'position' => 3, 'is_active' => true]);
+$catalog->setBundleVideos($bundleId, [$v1, $v2, $v3b]);
+$afterEdit = catalog_videos_for_payment($payments->find($paymentId));
+check(count($afterEdit) === 3, 'a video added to the bundle reaches the existing buyer, got ' . count($afterEdit));
+check(in_array($v3b, array_map('intval', array_column($afterEdit, 'id')), true), 'the new video is in the buyer\'s library');
+check((int) $db->value('SELECT COUNT(*) FROM payment_videos WHERE payment_id = ?', [$paymentId], 0) === 3, 'the snapshot was brought up to date too');
+
+// The admin "what did this purchase unlock" view reads the same live list.
+check((int) $catalog->videoSales($v3b) === 1, 'the added video shows the existing buyer as a sale');
+
+// A video taken out of the bundle stops being offered, but is never revoked.
+$catalog->setBundleVideos($bundleId, [$v1, $v2]);
+check(count(catalog_videos_for_payment($payments->find($paymentId))) === 2, 'a removed video leaves the live bundle list');
+check((int) $db->value('SELECT COUNT(*) FROM payment_videos WHERE payment_id = ?', [$paymentId], 0) === 3, 'the snapshot keeps the old row (nothing is revoked)');
+
+// Renaming / repricing reaches buyers too.
+$catalog->updateBundle($bundleId, ['name' => 'Pair — Deluxe', 'description' => '', 'price' => 350, 'position' => 1, 'is_active' => true], [$v1, $v2]);
+check($catalog->bundle($bundleId)['name'] === 'Pair — Deluxe', 'the bundle can be renamed');
+check(count(catalog_videos_for_payment($payments->find($paymentId))) === 2, 'renaming keeps both videos');
+$catalog->updateBundle($bundleId, ['name' => 'Pair', 'description' => '', 'price' => 400, 'position' => 1, 'is_active' => true], [$v1, $v2]);
+
+// Deleting a bundle falls back to the snapshot: access survives.
+$goneBundle = $catalog->createBundle(['name' => 'Doomed', 'description' => '', 'price' => 100, 'position' => 9, 'is_active' => true], [$v1, $v2]);
+$goneId = $payments->create([
+    'order_id' => 'order_gone', 'user_name' => 'Gone Buyer', 'user_email' => '',
+    'user_mobile' => '9000000009', 'amount' => 100, 'currency' => 'INR',
+    'product_type' => 'bundle', 'product_id' => $goneBundle, 'product_name' => 'Doomed',
+]);
+$payments->markSuccess($goneId, ['payment_id' => 'pay_gone', 'method' => 'upi']);
+catalog_grant_for_payment($payments->find($goneId));
+check(count(catalog_videos_for_payment($payments->find($goneId))) === 2, 'the doomed bundle unlocks two videos');
+$catalog->deleteBundle($goneBundle);
+check(count(catalog_videos_for_payment($payments->find($goneId))) === 2, 'a deleted bundle falls back to the snapshot: access survives');
+
+// Saving a bundle nobody bought is a no-op, not an error.
+$quiet = $catalog->syncBundleEntitlements(999);
+check($quiet['payments'] === 0 && $quiet['grants'] === 0, 'syncing an unknown bundle does nothing');
+
 $singleId = $payments->create([
     'order_id' => 'order_2', 'user_name' => 'Single Buyer', 'user_email' => 'single@example.com',
     'user_mobile' => '9000000001', 'amount' => 300, 'currency' => 'INR',
@@ -318,7 +357,8 @@ $stats = $payments->stats();
 $allPayments = (int) $db->value('SELECT COUNT(*) FROM payments', [], 0);
 check($stats['total'] === $allPayments, 'stats counts every payment');
 check($stats['success_count'] === $allPayments, 'stats counts successes');
-check(abs($stats['revenue'] - 1599.0) < 0.01, 'stats sums revenue: ' . $stats['revenue']);
+// 400 (Pair) + 300 (single) + 400 (repeat) + 100 (Doomed) + 199 + 200 (orphan) = 1599 + 100
+check(abs($stats['revenue'] - 1699.0) < 0.01, 'stats sums revenue: ' . $stats['revenue']);
 check($stats['active_access'] >= 1, 'lifetime access counts as active');
 
 $export = $payments->exportRows([]);

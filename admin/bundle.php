@@ -103,9 +103,24 @@ if (is_post()) {
                     app_log('info', 'Bundle created', ['bundle_id' => $newId, 'videos' => $selected, 'admin_id' => $admin['id']]);
                     flash('success', 'Bundle created — it is now visible on the home page.');
                 } else {
-                    $catalog->updateBundle((int) $bundle['id'], $data, $selected);
-                    app_log('info', 'Bundle updated', ['bundle_id' => (int) $bundle['id'], 'videos' => $selected, 'admin_id' => $admin['id']]);
-                    flash('success', 'Bundle saved.');
+                    $sync = $catalog->updateBundle((int) $bundle['id'], $data, $selected);
+                    app_log('info', 'Bundle updated', [
+                        'bundle_id' => (int) $bundle['id'],
+                        'videos'    => $selected,
+                        'buyers'    => (int) $sync['payments'],
+                        'grants'    => (int) $sync['grants'],
+                        'admin_id'  => (int) $admin['id'],
+                    ]);
+
+                    // Say it out loud: a bundle edit is a live change for its buyers.
+                    $message = 'Bundle saved.';
+                    if ($sync['payments'] > 0) {
+                        $message .= ' The ' . (int) $sync['payments'] . ' customer(s) who already bought it see the new video list on their next visit.';
+                        if ($sync['grants'] > 0) {
+                            $message .= ' ' . (int) $sync['grants'] . ' new video unlock(s) were added to their library.';
+                        }
+                    }
+                    flash('success', $message);
                 }
                 redirect('admin/bundles.php');
             } catch (Throwable $e) {

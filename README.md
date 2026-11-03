@@ -76,6 +76,9 @@ no build step, no Node.js required.
   instead of erasing a customer's access.
 - **Bundles**: name a set of videos and sell it for one price, with automatic savings
   calculation and a warning if the bundle would cost more than buying separately.
+  Editing a bundle is **live**: add a video and everyone who already bought that bundle
+  gets it immediately (their `payment_videos` snapshot is topped up too); remove one and it
+  leaves the bundle for future buyers while the people who already watched it keep it.
 - Payments: search (name, e-mail, mobile, order id, payment id, **product**), status +
   date filters, sortable columns, pagination, CSV export (includes product + lifetime
   access), per-payment detail view with audit timeline and the **videos that purchase
@@ -148,7 +151,7 @@ no build step, no Node.js required.
 | Videos | `/admin/videos.php` | Video library: add/edit/hide/delete, price per video, sales count |
 | New / edit video | `/admin/video.php` | YouTube link, title, description, price, order, visibility |
 | Bundles | `/admin/bundles.php` | Named bundles sold for one payment, savings preview |
-| New / edit bundle | `/admin/bundle.php` | Bundle name, price, description, videos in the bundle |
+| New / edit bundle | `/admin/bundle.php` | Bundle name, price, description, videos in the bundle (saved changes reach existing buyers) |
 | Payments | `/admin/payments.php` | Search, filters, sorting, pagination, CSV export, product column |
 | Payment detail | `/admin/payment.php?id=…` | Full record, product, unlocked videos, audit timeline, regenerate access link |
 | Site settings | `/admin/settings.php` | Branding (logo upload), payments, video, access, support |
@@ -240,8 +243,12 @@ Visitor                App                                  Razorpay
 - The browser sends only `item_type` (`video`/`bundle`) and `item_id`; **the price is re-read
   from the database** in `api/create_order.php`, so a tampered form cannot buy a ₹999 bundle
   for ₹1.
-- What a purchase unlocks is snapshotted into `payment_videos` at payment time: editing or
-  deleting a bundle later never changes an existing customer's library.
+- Every unlock is recorded in `payment_videos` at payment time (the audit trail, and what
+  the admin "unlocked videos" panel lists). A **bundle purchase is read live**: `catalog_videos_for_payment()`
+  resolves the bundle's current videos, so a bundle edit reaches the people who already
+  bought it. Taking a video out of a bundle only affects what is offered from then on —
+  nothing is ever revoked — and a deleted bundle falls back to the snapshot, so no one
+  loses access they paid for.
 - `success.php` refuses to render anything without a **valid, unexpired, successful** payment
   token — the page itself is not enough (this is the biggest difference from v1).
 
@@ -322,9 +329,12 @@ design is untouched.
 
 **Public site**
 
-- Header keeps the logo and two icon shortcuts (library/restore + admin); the text nav is
-  replaced by the **bottom tab bar**: Home · Videos · Bundles · Library (or Restore).
-  The active tab follows the section in view (a small scroll spy in `app.js`).
+- Header keeps the logo and one icon shortcut (library/restore); the text nav is replaced
+  by the **bottom tab bar**: Home · Videos · Bundles · Library (or Restore). The active tab
+  follows the section in view (a small scroll spy in `app.js`).
+- The customer-facing pages carry **no link to the admin panel** — not in the header, the
+  footer or the tab bar. The owner reaches it by typing `/admin/login.php` (or the
+  bookmark they already have); the installer still prints the URL once, at setup.
 - Nothing is bought before it is chosen: the phone shows a **“Pick a video or a bundle”**
   prompt in place of the checkout card, and no floating bar, until a card is tapped (an
   explicit `?buy=video:2` / `?buy=bundle:1` link counts as a choice). `body.no-pick` drives
@@ -456,7 +466,7 @@ design is untouched.
 | `videos` | The library: title, description, YouTube URL, **own price**, position, visibility |
 | `bundles` | Named group of videos sold for one price (name is shown to buyers) |
 | `bundle_items` | Which videos belong to which bundle (unique per pair) |
-| `payment_videos` | Snapshot of what a payment unlocked (unique per payment+video) |
+| `payment_videos` | What a payment unlocked (unique per payment+video). Kept up to date when a bundle is edited; for bundle purchases the live bundle is what the buyer sees |
 | `payment_events` | Audit trail (order created, payment captured, webhook, access granted/regenerated) |
 | `rate_events` | Rate-limit buckets (admin login, checkout, access restore); pruned automatically |
 
@@ -706,8 +716,9 @@ Because payments touch money, verify these after any change:
 16. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
     library of whoever bought it), delete a sold video → it is hidden, not erased.
 17. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
-    savings message), save, buy it, then remove a video from the bundle → the earlier buyer
-    still sees it.
+    savings message), save, buy it, then **add** a third video → the earlier buyer sees all
+    three on their next visit (the save flash says how many buyers were updated); remove one
+    → the earlier buyer still sees it, future buyers do not.
 18. **Filters** — search by partial e-mail and by **product name**, filter by status and date
     range, sort each column, paginate, export CSV and open it in Excel.
 19. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);

@@ -46,9 +46,6 @@ $logo = app() ? app()->settings->logoUrl() : '';
                     <a href="<?= e(url('restore.php')) ?>">Restore access</a>
                 <?php endif; ?>
                 <a href="#faq">FAQ</a>
-                <a class="site-nav__admin" href="<?= e(url('admin/login.php')) ?>" title="Admin panel">
-                    <?= icon('lock', 16) ?><span>Admin</span>
-                </a>
             </nav>
 
             <?php // Compact header action: only shown on phones, where the text nav is hidden. ?>
@@ -62,9 +59,6 @@ $logo = app() ? app()->settings->logoUrl() : '';
                         <?= icon('refresh', 19) ?>
                     </a>
                 <?php endif; ?>
-                <a class="icon-btn" href="<?= e(url('admin/login.php')) ?>" aria-label="Admin panel">
-                    <?= icon('lock', 18) ?>
-                </a>
             </div>
         </div>
     </header>
@@ -97,7 +91,6 @@ $logo = app() ? app()->settings->logoUrl() : '';
                     <a href="tel:<?= e(normalize_mobile($settings['support_phone'])) ?>"><?= icon('phone', 16) ?> <?= e(display_mobile($settings['support_phone'])) ?></a>
                 <?php endif; ?>
                 <a href="<?= e(url('restore.php')) ?>"><?= icon('refresh', 16) ?> Restore access</a>
-                <a href="<?= e(url('admin/login.php')) ?>"><?= icon('lock', 16) ?> Admin</a>
             </div>
         </div>
     </footer>

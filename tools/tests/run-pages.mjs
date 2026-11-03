@@ -60,6 +60,8 @@ seed_bundle($db);
     hasNot: [
         'placeholder="you@example.com" required',
         'Bonus — Behind the Scenes', 'Fatal error', 'Warning:', 'Notice:',
+        // the customer-facing site never links to the admin panel
+        'admin/login.php', 'site-nav__admin', '>Admin</a>', 'aria-label="Admin panel"',
     ],
     order: [
         // every buying option comes before anything informational
@@ -216,6 +218,38 @@ $_SESSION['access_token'] = '${TOKEN}';
     ],
 });
 
+// The admin adds a third video to the bundle: buyers of that bundle see it at
+// once, without a new payment and without re-granting anything by hand.
+scenario('bundle-edit-reaches-buyers', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';
+// The admin adds video 3 (which is not even on sale) to the bundle.
+$db->add('bundle_items', ['bundle_id' => 1, 'video_id' => 3, 'position' => 3, 'created_at' => now()]);
+`, 'success.php', {
+    has: [
+        'Bonus — Behind the Scenes',
+        '3 new · 3 in your library',
+        'Your videos are ready.',
+    ],
+    hasNot: ['Fatal error', 'Warning:', 'Notice:'],
+}, { query: `?t=${TOKEN}`, get: { t: TOKEN } });
+
+scenario('bundle-edit-renamed', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';
+$db->tables['bundles'][0]['name'] = 'Season One — Deluxe';
+`, 'index.php', {
+    // the buyer's own bundle card follows the admin's rename
+    has: ['Season One — Deluxe', 'bundle-card is-owned'],
+    hasNot: ['Fatal error', 'Warning:', 'Notice:'],
+});
+
 scenario('home-bundle-purchased-selected', `
 seed_videos($db);
 seed_bundle($db);
@@ -359,6 +393,16 @@ seed_bundle($db);
     hasNot: ['Fatal error', 'Warning:'],
 }, { login: true });
 
+scenario('admin-bundles-saved-flash', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+flash('success', 'Bundle saved. The 1 customer(s) who already bought it see the new video list on their next visit.');
+`, 'admin/bundles.php', {
+    has: ['Bundle saved.', 'see the new video list'],
+    hasNot: ['Fatal error', 'Warning:'],
+}, { login: true });
+
 scenario('admin-bundles-empty', '', 'admin/bundles.php', {
     has: ['No bundles yet', 'Add a video'],
     hasNot: ['Fatal error', 'Warning:'],
@@ -373,9 +417,34 @@ scenario('admin-bundle-edit', `
 seed_videos($db);
 seed_bundle($db);
 `, 'admin/bundle.php', {
-    has: ['Bundle details', 'Season One — Complete', 'checked', 'Delete bundle'],
+    has: ['Bundle details', 'Season One — Complete', 'checked', 'Delete bundle', 'Saving is live', 'Update reaches'],
     hasNot: ['Fatal error', 'Warning:'],
 }, { login: true, get: { id: '1' }, query: '?id=1' });
+
+// Saving a bundle through the real controller: the new video is unlocked for
+// the customer who already paid, and the admin is told so.
+scenario('admin-bundle-save-syncs', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db);
+`, 'admin/bundle.php', {
+    // A valid save redirects to the bundles list, where the flash is shown; the
+    // unlock itself is asserted in tests/db.php (updateBundle -> syncBundleEntitlements)
+    // and in bundle-edit-reaches-buyers (the buyer's library).
+    has: ['http-equiv="refresh"', 'admin/bundles.php'],
+    hasNot: ['Fatal error', 'Warning:', 'Notice:'],
+}, {
+    login: true,
+    get: { id: '1' },
+    query: '?id=1',
+    csrf: true,
+    redirect: true,
+    post: {
+        action: 'save', name: 'Season One — Complete', description: 'Both episodes, one payment.',
+        price: '399', position: '1', is_active: '1', 'video_ids[]': '3',
+        video_ids: { 0: '1', 1: '2', 2: '3' },
+    },
+});
 
 scenario('admin-payment-lifetime', `
 seed_videos($db);

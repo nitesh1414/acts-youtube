@@ -99,6 +99,10 @@ foreach ($videos as $video) {
                        value="<?= e($value('price')) ?>">
                 <?php if ($error('price')): ?><p class="field__error"><?= e($error('price')) ?></p><?php endif; ?>
                 <p class="hint">One payment for every video in the bundle. Must not exceed the total of the individual prices.</p>
+                <p class="hint">
+                    <?= icon('refresh', 14) ?>
+                    Saving is live: everyone who already paid for this bundle gets any video you add here, straight away.
+                </p>
             </div>
 
             <div class="field">
@@ -118,6 +122,9 @@ foreach ($videos as $video) {
                 <dl class="detail-list" style="margin-top:16px">
                     <div><dt>Sold</dt><dd><?= (int) app()->catalog->bundleSales((int) $bundle['id']) ?> time(s)</dd></div>
                     <div><dt>Videos</dt><dd><?= (int) $bundle['video_count'] ?></dd></div>
+                    <div><dt>Update reaches</dt>
+                        <dd><?= (int) app()->catalog->bundleSales((int) $bundle['id']) ?> buyer(s)</dd>
+                    </div>
                 </dl>
             <?php endif; ?>
 

@@ -2,9 +2,12 @@
 /**
  * The video library: videos, bundles and what each payment unlocks.
  *
- * A bundle is just a named group of videos sold at one price. Purchases are
- * snapshotted into `payment_videos`, so editing a bundle later never changes
- * what an existing customer can watch.
+ * A bundle is just a named group of videos sold at one price. Each purchase is
+ * snapshotted into `payment_videos` (that is the audit trail and the safety net),
+ * but a bundle purchase is read live: whatever the bundle holds today is what its
+ * buyers can watch today, so adding a video to a bundle reaches the people who
+ * already paid for it. Deleting the bundle falls back to the snapshot, so nobody
+ * loses a video they paid for.
  */
 
 final class Catalog
@@ -241,13 +244,14 @@ final class Catalog
     }
 
     /**
-     * @param array<string, mixed> $data
-     * @param array<int, int>      $videoIds
+     * @param  array<string, mixed> $data
+     * @param  array<int, int>      $videoIds
+     * @return array{payments:int, grants:int} what the change did for existing buyers
      */
     public function updateBundle($id, array $data, array $videoIds)
     {
         $this->db->update('bundles', $this->bundleRow($data), 'id = ?', [(int) $id]);
-        $this->setBundleVideos((int) $id, $videoIds);
+        return $this->setBundleVideos((int) $id, $videoIds);
     }
 
     public function deleteBundle($id)
@@ -257,9 +261,11 @@ final class Catalog
     }
 
     /**
-     * Replace the videos of a bundle.
+     * Replace the videos of a bundle. Existing buyers of the bundle see the new
+     * contents immediately (see syncBundleEntitlements()).
      *
-     * @param array<int, int> $videoIds
+     * @param  array<int, int> $videoIds
+     * @return array{payments:int, grants:int}
      */
     public function setBundleVideos($bundleId, array $videoIds)
     {
@@ -279,6 +285,9 @@ final class Catalog
                 'created_at' => now(),
             ]);
         }
+
+        // Everybody who already bought this bundle sees the new contents.
+        return $this->syncBundleEntitlements($bundleId);
     }
 
     /**
@@ -342,7 +351,11 @@ final class Catalog
     }
 
     /**
-     * Videos a payment unlocked, in bundle order.
+     * The picture of what a payment unlocked when it was granted (the
+     * `payment_videos` rows), in bundle order.
+     *
+     * For bundles this is a snapshot; use catalog_videos_for_payment() when you
+     * want what the buyer may watch *now*.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -364,6 +377,55 @@ final class Catalog
             }
         }
         return $out;
+    }
+
+    /**
+     * Bring the `payment_videos` snapshot of every buyer of this bundle up to
+     * date with the bundle's current videos.
+     *
+     * Called after a bundle is saved, so the audit trail / admin screens match
+     * the live access the buyer gets. Additive only: a video that was taken out
+     * of the bundle keeps its row, so it is never revoked from someone who
+     * already paid for it (and stays available if the bundle is deleted).
+     *
+     * @return array{payments:int, grants:int} how many buyers and new rows
+     */
+    public function syncBundleEntitlements($bundleId)
+    {
+        $bundleId = (int) $bundleId;
+        $bundle = $bundleId > 0 ? $this->bundle($bundleId) : null;
+        if ($bundle === null || $bundle['video_ids'] === []) {
+            return ['payments' => 0, 'grants' => 0];
+        }
+
+        $videoIds = array_values(array_unique(array_map('intval', $bundle['video_ids'])));
+        $payments = $this->db->all(
+            "SELECT id FROM payments WHERE product_type = 'bundle' AND product_id = ? AND status = 'success'",
+            [$bundleId]
+        );
+
+        $grants = 0;
+        foreach ($payments as $payment) {
+            $paymentId = (int) $payment['id'];
+            $have = [];
+            foreach ($this->db->all('SELECT video_id FROM payment_videos WHERE payment_id = ?', [$paymentId]) as $row) {
+                $have[(int) $row['video_id']] = true;
+            }
+            foreach ($videoIds as $videoId) {
+                if (isset($have[$videoId])) {
+                    continue;
+                }
+                $this->db->insert('payment_videos', [
+                    'payment_id' => $paymentId,
+                    'video_id'   => $videoId,
+                    'created_at' => now(),
+                ]);
+                $have[$videoId] = true;
+                $grants++;
+            }
+        }
+
+        return ['payments' => count($payments), 'grants' => $grants];
     }
 
     public function paymentHasEntitlements($paymentId)
@@ -495,14 +557,32 @@ function catalog_grant_for_payment(array $payment)
 }
 
 /**
- * Videos a buyer may watch. Handles payments from before the library existed.
+ * Videos a buyer may watch right now.
+ *
+ * A bundle purchase is read live: edit the bundle in the admin panel and its
+ * existing buyers get the new videos immediately (a video taken out of the
+ * bundle is no longer offered to them, a deleted bundle falls back to the
+ * snapshot taken at payment time, so nothing paid for is ever lost).
  *
  * @param  array<string, mixed> $payment
  * @return array<int, array<string, mixed>>
  */
 function catalog_videos_for_payment(array $payment)
 {
-    return app()->catalog->videosForPayment((int) $payment['id']);
+    $catalog = app()->catalog;
+    $paymentId = (int) $payment['id'];
+
+    $type = isset($payment['product_type']) ? strtolower((string) $payment['product_type']) : '';
+    $productId = isset($payment['product_id']) ? (int) $payment['product_id'] : 0;
+
+    if ($type === 'bundle' && $productId > 0) {
+        $bundle = $catalog->bundle($productId);
+        if ($bundle !== null && $bundle['videos'] !== []) {
+            return $bundle['videos'];
+        }
+    }
+
+    return $catalog->videosForPayment($paymentId);
 }
 
 /**
