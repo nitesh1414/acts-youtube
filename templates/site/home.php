@@ -77,6 +77,12 @@ if ($selected !== null && $selected['videos'] !== []) {
     $selectedWatchId = (int) $selected['videos'][0]['id'];
 }
 
+// Only an explicit ?buy=video:2 / ?buy=bundle:1 link counts as a pick. A plain
+// visit preselects the first product so the form has values ready, but nobody
+// is "buying" yet: the checkout stays behind a prompt until a card is chosen.
+$explicitPick = trim((string) query_str('buy')) !== '';
+$gateCheckout = $selected !== null && !$selectedOwned && !$explicitPick;
+
 $priceLabel = $selected !== null ? money((float) $selected['price'], $currency) : '';
 $videoCount = $selected !== null ? count($selected['videos']) : 0;
 $periodLabel = $videoCount > 1 ? $videoCount . ' videos' : '1 video';
@@ -409,7 +415,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
 <?php endif; ?>
 
 <?php if ($hasProducts): ?>
-    <section class="section" id="checkout">
+    <section class="section<?= $gateCheckout ? ' is-unpicked' : '' ?>" id="checkout">
         <div class="wrap section__inner section__inner--narrow">
             <header class="section__head">
                 <?php if ($selectedOwned): ?>
@@ -459,11 +465,19 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                 </div>
             <?php else: ?>
             <div class="checkout">
-                <?php // On phones the checkout stays out of sight until something is picked. ?>
+                <?php // Nothing is for sale yet: the checkout waits for a choice. ?>
                 <div class="card card--pad pick-prompt" id="pick-prompt">
                     <?= icon('tag', 26) ?>
-                    <h3>Pick a video or a bundle</h3>
-                    <p>Choose one above and the price and the payment form appear here. Nothing is bought until you press <strong>Pay</strong>.</p>
+                    <h3>Pick a video or a bundle first</h3>
+                    <p>
+                        There is no price and no payment form until you choose what you want.
+                        Tap <strong>Choose this video</strong> or <strong>Choose this bundle</strong> above — the
+                        price and the checkout appear right here, and nothing is charged until you press
+                        <strong>Pay</strong>.
+                    </p>
+                    <a class="btn btn--ghost btn--sm" href="#library">
+                        <?= icon('play', 15) ?> See what is on sale
+                    </a>
                 </div>
 
                 <div class="card card--pad paycard">
@@ -741,12 +755,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
 <?php endif; ?>
 
 <?php if ($hasProducts && !$selectedOwned): ?>
-    <?php
-    // App-style action bar on phones. It only appears once the visitor has
-    // actually picked something: an explicit ?buy= link counts as a pick, the
-    // default preselection does not (nobody is "buying" anything yet).
-    $explicitPick = !empty($explicitPick) || trim((string) query_str('buy')) !== '';
-    ?>
+    <?php // App-style action bar on phones — only after a real pick (see $explicitPick). ?>
     <div class="buy-bar" data-buy-bar<?= $explicitPick ? '' : ' hidden' ?>>
         <div class="buy-bar__info">
             <span class="buy-bar__label"><?= icon('tag', 12) ?> You are buying</span>

@@ -335,10 +335,13 @@ design is untouched.
 - The customer-facing pages carry **no link to the admin panel** — not in the header, the
   footer or the tab bar. The owner reaches it by typing `/admin/login.php` (or the
   bookmark they already have); the installer still prints the URL once, at setup.
-- Nothing is bought before it is chosen: the phone shows a **“Pick a video or a bundle”**
-  prompt in place of the checkout card, and no floating bar, until a card is tapped (an
-  explicit `?buy=video:2` / `?buy=bundle:1` link counts as a choice). `body.no-pick` drives
-  this, and the first tap clears it.
+- Nothing is bought before it is chosen — on **every** screen size: the checkout section
+  opens as a **“Pick a video or a bundle first”** prompt, with no price, no payment form and
+  no “You are buying” bar, until a card is tapped (an explicit `?buy=video:2` /
+  `?buy=bundle:1` link counts as a choice). The server puts `is-unpicked` on `#checkout`;
+  `app.js` removes it on the first pick, which reveals the pay card and scrolls to it. A
+  visitor who already owns the preselected product sees their *Already in your library*
+  card instead — no prompt, nothing to buy.
 - A floating **action bar** above the tab bar shows the selected product and its price.
   It appears with that first choice, stays in sync when the visitor taps any *Buy* button
   and slides away once the real checkout form is on screen, so the price is never more

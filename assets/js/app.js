@@ -198,20 +198,22 @@
     }
 
     /**
-     * The floating "you are buying" bar starts hidden: it is only meaningful
-     * after the visitor picks a video or a bundle.
+     * A choice has been made: reveal the checkout (on every screen size) and the
+     * floating "you are buying" bar (phones only — CSS decides).
      */
     let buyBarWatched = false;
 
     function revealBuyBar() {
+        const checkout = document.getElementById('checkout');
+        if (checkout) {
+            checkout.classList.remove('is-unpicked');
+        }
+
         const bar = document.querySelector('[data-buy-bar]');
         if (!bar) { return; }
         bar.hidden = false;
         document.body.classList.add('has-buy-bar');
-        // A choice has been made: the phone checkout may show itself now.
-        document.body.classList.remove('no-pick');
 
-        const checkout = document.getElementById('checkout');
         if (!buyBarWatched && checkout && 'IntersectionObserver' in window) {
             buyBarWatched = true;
             new IntersectionObserver(function (entries) {
@@ -289,7 +291,7 @@
         // Hide the action bar once the real checkout form is on screen.
         const buyBar = document.querySelector('[data-buy-bar]');
         if (buyBar && !buyBar.hidden) {
-            // An explicit ?buy= link: the bar is already relevant.
+            // An explicit ?buy= link: the bar and the checkout are already live.
             revealBuyBar();
         }
 

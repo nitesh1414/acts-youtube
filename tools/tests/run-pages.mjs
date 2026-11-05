@@ -50,7 +50,9 @@ seed_bundle($db);
         'data-tabbar', 'tabbar__item is-active', 'data-buy-bar', 'id="buy-bar-price"',
         'class="site-body has-tabbar',
         // ...but nothing is being bought until a card is tapped
-        'no-pick', '<div class="buy-bar" data-buy-bar hidden>', 'id="pick-prompt"',
+        '<section class="section is-unpicked" id="checkout">',
+        '<div class="buy-bar" data-buy-bar hidden>', 'id="pick-prompt"',
+        'Pick a video or a bundle first',
         // e-mail is optional, name + mobile are not
         'Email address <span class="field__optional">optional</span>',
         'placeholder="you@example.com (not required)"',
@@ -101,7 +103,7 @@ seed_bundle($db);
         // an explicit pick shows the action bar straight away
         '<div class="buy-bar" data-buy-bar>',
     ],
-    hasNot: ['Fatal error', 'Warning:', 'no-pick', 'data-buy-bar hidden'],
+    hasNot: ['Fatal error', 'Warning:', 'is-unpicked', 'data-buy-bar hidden'],
 }, { query: '?buy=video:2', get: { buy: 'video:2' } });
 
 scenario('home-buy-bundle', `
@@ -284,6 +286,19 @@ $_SESSION['access_token'] = '${TOKEN}';
         'Fatal error', 'Warning:',
     ],
 }, { get: { buy: 'video:1' }, query: '?buy=video:1' });
+
+scenario('home-owned-no-pick', `
+seed_videos($db);
+seed_bundle($db);
+seed_payment($db, ['product_type' => 'video', 'product_id' => 1, 'product_name' => 'Episode One — The Beginning', 'amount' => '199.00'], [1]);
+$db->tables['payments'][0]['access_token'] = '${TOKEN}';
+$_SESSION['access_token'] = '${TOKEN}';
+`, 'index.php', {
+    // No ?buy= — the preselected video is already theirs, so the checkout
+    // section shows their card (with its heading), never the pick prompt.
+    has: ['id="owned-card"', 'You already own this', 'Already in your library'],
+    hasNot: ['is-unpicked', 'Pick a video or a bundle first', 'Fatal error', 'Warning:'],
+});
 
 scenario('home-owner-buys-missing-video', `
 seed_videos($db);
@@ -605,12 +620,41 @@ scenario('locked-page', '', 'success.php', {
 });
 
 // ---------------------------------------------------------------------------
+// The checkout gate must hold on every screen size, not only on phones: the CSS
+// rules have to live outside the phone-only media query.
+// ---------------------------------------------------------------------------
+
+let failures = 0;
+const css = fs.readFileSync(path.join(REPO, 'assets/css/app.css'), 'utf8');
+const phoneQuery = css.indexOf('@media (max-width: 760px)');
+const gateRule = css.indexOf('.is-unpicked .paycard');
+const promptRule = css.indexOf('.is-unpicked .pick-prompt');
+if (phoneQuery < 0 || gateRule < 0 || promptRule < 0) {
+    console.log('FAIL css-gate: the checkout gate rules are missing');
+    failures += 1;
+} else {
+    for (const [label, index] of [['paycard', gateRule], ['prompt', promptRule]]) {
+        if (index > phoneQuery) {
+            console.log(`FAIL css-gate: the ${label} rule sits inside the phone media query`);
+            failures += 1;
+        }
+    }
+}
+// The prompt is hidden by default and only shown by the gate (never a visible
+// "pick something" card next to a live checkout).
+if (!/\.pick-prompt \{ display: none; \}/.test(css)) {
+    console.log('FAIL css-gate: .pick-prompt is not hidden by default');
+    failures += 1;
+} else if (gateRule < phoneQuery && promptRule < phoneQuery) {
+    console.log('ok   css-gate  (checkout stays closed on every screen size)');
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
 const phpArray = value => "json_decode('" + JSON.stringify(value).replace(/'/g, "\\'") + "', true)";
 
-let failures = 0;
 for (const s of scenarios) {
     const php = await bootApp(REPO);
 
