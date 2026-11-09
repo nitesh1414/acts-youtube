@@ -24,6 +24,10 @@ $form = $bundle !== null ? $bundle : [
     'is_active'   => true,
     'video_ids'   => [],
 ];
+$form['allow_single_purchase'] = [];
+foreach ($allVideos as $video) {
+    $form['allow_single_purchase'][(int) $video['id']] = !empty($video['allow_single_purchase']);
+}
 $errors = [];
 
 if (is_post()) {
@@ -43,19 +47,34 @@ if (is_post()) {
             return $v > 0;
         })));
 
-        $form = [
-            'name'        => post_str('name'),
-            'description' => post_str('description'),
-            'price'       => post_str('price'),
-            'position'    => post_str('position', '0'),
-            'is_active'   => !empty($_POST['is_active']),
-            'video_ids'   => $selected,
-        ];
-
         $known = [];
         foreach ($allVideos as $video) {
             $known[(int) $video['id']] = $video;
         }
+
+        // The individual-sale choice belongs to the video itself (not this
+        // particular bundle), so it follows that video across all bundles.
+        $postedAvailability = isset($_POST['allow_single_purchase']) && is_array($_POST['allow_single_purchase'])
+            ? $_POST['allow_single_purchase']
+            : [];
+        $availability = [];
+        foreach ($known as $videoId => $video) {
+            $existing = !empty($video['allow_single_purchase']);
+            $raw = isset($postedAvailability[$videoId]) && is_scalar($postedAvailability[$videoId])
+                ? (string) $postedAvailability[$videoId]
+                : '';
+            $availability[$videoId] = $raw === '1' ? true : ($raw === '0' ? false : $existing);
+        }
+
+        $form = [
+            'name'                   => post_str('name'),
+            'description'            => post_str('description'),
+            'price'                  => post_str('price'),
+            'position'               => post_str('position', '0'),
+            'is_active'              => !empty($_POST['is_active']),
+            'video_ids'              => $selected,
+            'allow_single_purchase'  => $availability,
+        ];
 
         if (text_length($form['name']) < 2 || text_length($form['name']) > 160) {
             $errors['name'] = 'Give the bundle a name your customers will understand (2–160 characters).';
@@ -76,14 +95,20 @@ if (is_post()) {
             $errors['position'] = 'Order must be a whole number (0–9999).';
         }
 
-        // Warn (but do not block) when the bundle costs more than buying separately.
+        // Compare the bundle price only when every video is currently offered
+        // as a single purchase. Bundle-only/hidden videos cannot be counted as
+        // a separately purchasable price.
         $singleTotal = 0.0;
+        $singleCount = 0;
         foreach ($selected as $videoId) {
-            if (isset($known[$videoId])) {
+            if (isset($known[$videoId]) && !empty($form['allow_single_purchase'][$videoId])
+                && !empty($known[$videoId]['is_active'])) {
                 $singleTotal += (float) $known[$videoId]['price'];
+                $singleCount++;
             }
         }
-        if (empty($errors['price']) && $singleTotal > 0 && (float) $form['price'] > $singleTotal) {
+        if (empty($errors['price']) && count($selected) > 0 && $singleCount === count($selected)
+            && $singleTotal > 0 && (float) $form['price'] > $singleTotal) {
             $errors['price'] = 'This bundle costs more than the ' . count($selected) . ' videos bought separately ('
                 . money($singleTotal, (string) $settings['currency']) . '). Lower the bundle price.';
         }
@@ -98,12 +123,27 @@ if (is_post()) {
             ];
 
             try {
+                // Save the bundle membership and every video-level single-sale
+                // choice together so a failed write cannot leave a half-applied
+                // configuration.
+                $saved = app()->db->transaction(function () use ($catalog, $bundle, $data, $selected, $availability) {
+                    foreach ($availability as $videoId => $available) {
+                        $catalog->setSinglePurchaseAvailability((int) $videoId, $available);
+                    }
+                    if ($bundle === null) {
+                        return ['id' => $catalog->createBundle($data, $selected), 'sync' => null];
+                    }
+                    return [
+                        'id' => (int) $bundle['id'],
+                        'sync' => $catalog->updateBundle((int) $bundle['id'], $data, $selected),
+                    ];
+                });
+
                 if ($bundle === null) {
-                    $newId = $catalog->createBundle($data, $selected);
-                    app_log('info', 'Bundle created', ['bundle_id' => $newId, 'videos' => $selected, 'admin_id' => $admin['id']]);
+                    app_log('info', 'Bundle created', ['bundle_id' => (int) $saved['id'], 'videos' => $selected, 'admin_id' => $admin['id']]);
                     flash('success', 'Bundle created — it is now visible on the home page.');
                 } else {
-                    $sync = $catalog->updateBundle((int) $bundle['id'], $data, $selected);
+                    $sync = $saved['sync'];
                     app_log('info', 'Bundle updated', [
                         'bundle_id' => (int) $bundle['id'],
                         'videos'    => $selected,
@@ -124,8 +164,12 @@ if (is_post()) {
                 }
                 redirect('admin/bundles.php');
             } catch (Throwable $e) {
-                app_log('error', 'Could not save bundle: ' . $e->getMessage());
-                $errors['general'] = 'The bundle could not be saved. Please try again.';
+                if ($e instanceof DatabaseException) {
+                    $errors['general'] = database_error_hint($e);
+                } else {
+                    app_log('error', 'Could not save bundle: ' . $e->getMessage());
+                    $errors['general'] = 'The bundle could not be saved because of an unexpected application error. Please try again.';
+                }
             }
         }
     }

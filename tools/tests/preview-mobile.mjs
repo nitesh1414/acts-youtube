@@ -26,15 +26,17 @@ if (!fs.existsSync(source)) {
 
 /** Screens to show, in review order. */
 const screens = [
-    ['home.html', 'Storefront', 'Bundles first, then videos, then checkout'],
+    ['home.html', 'Storefront', 'Bundles first, then single-sale videos, then checkout'],
+    ['home-bundle-only.html', 'Bundle-only video', 'Stays in the bundle, absent from single purchases'],
     ['home-buy-video.html', 'Single video picked', 'Bundle nudge under the pay card'],
+    ['admin-bundle.html', 'Admin · bundle editor', 'Choose single purchase or bundle-only per video'],
     ['home-purchased.html', 'Already bought', 'Owned state — no pay form'],
     ['library.html', 'Buyer library', 'Player, receipt and video shelf'],
     ['admin-dashboard.html', 'Admin · dashboard', 'Stats, chart and recent payments'],
     ['admin-videos.html', 'Admin · videos', 'Table becomes labelled cards'],
     ['admin-payments.html', 'Admin · payments', 'Filters, cards and paging'],
     ['admin-settings.html', 'Admin · settings', 'Long form with a sticky save bar'],
-    ['restore.html', 'Restore access', 'Mobile + name; e-mail optional'],
+    ['restore.html', 'Restore access', 'Mobile only; e-mail optional'],
     ['login.html', 'Admin sign in', 'Full-bleed auth card'],
 ];
 

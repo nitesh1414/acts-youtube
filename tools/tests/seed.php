@@ -10,19 +10,19 @@ function seed_videos(FakeDatabase $db)
     $db->add('videos', [
         'title' => 'Episode One — The Beginning', 'description' => 'How it all started.',
         'youtube_url' => 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
-        'price' => '199.00', 'position' => 1, 'is_active' => 1,
+        'price' => '199.00', 'position' => 1, 'is_active' => 1, 'allow_single_purchase' => 1,
         'created_at' => now(), 'updated_at' => now(),
     ]);
     $db->add('videos', [
         'title' => 'Episode Two — The Return', 'description' => 'The story continues.',
         'youtube_url' => 'https://youtu.be/bbbbbbbbbbb',
-        'price' => '299.00', 'position' => 2, 'is_active' => 1,
+        'price' => '299.00', 'position' => 2, 'is_active' => 1, 'allow_single_purchase' => 1,
         'created_at' => now(), 'updated_at' => now(),
     ]);
     $db->add('videos', [
         'title' => 'Bonus — Behind the Scenes', 'description' => 'Hidden from the shop.',
         'youtube_url' => 'https://youtu.be/ccccccccccc',
-        'price' => '99.00', 'position' => 3, 'is_active' => 0,
+        'price' => '99.00', 'position' => 3, 'is_active' => 0, 'allow_single_purchase' => 1,
         'created_at' => now(), 'updated_at' => now(),
     ]);
 }

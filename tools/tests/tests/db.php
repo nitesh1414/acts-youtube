@@ -66,6 +66,7 @@ check($video !== null, 'created video is readable');
 check($video['title'] === 'Episode One', 'title trimmed: ' . $video['title']);
 check(abs($video['price'] - 199.5) < 0.001, 'price stored as float');
 check($video['is_active'] === true, 'is_active is a bool');
+check($video['allow_single_purchase'] === true, 'new videos default to individual sale');
 check($video['youtube_id'] === 'dQw4w9WgXcQ', 'youtube id derived from the link');
 check($video['embed_url'] !== '' && $video['thumbnail'] !== '', 'embed url + thumbnail derived');
 
@@ -187,6 +188,56 @@ check(catalog_selected_product($emptyStore, '') === null, 'nothing is preselecte
 check(catalog_selected_product($emptyStore, 'video:1') === null, 'a stale ?buy= link selects nothing');
 check(catalog_product('video', 1) === null, 'a missing video cannot be bought');
 check(function_exists('catalog_legacy_product') === false, 'the legacy product helper was deleted');
+
+// A video may be sold inside a bundle without being a standalone product.
+reset_data();
+$catalog = app()->catalog;
+$standalone = $catalog->createVideo([
+    'title' => 'Standalone', 'description' => '', 'youtube_url' => 'https://youtu.be/aaaaaaaaaaa',
+    'price' => 199, 'position' => 1, 'is_active' => true, 'allow_single_purchase' => true,
+]);
+$bundleOnly = $catalog->createVideo([
+    'title' => 'Bundle only', 'description' => '', 'youtube_url' => 'https://youtu.be/bbbbbbbbbbb',
+    'price' => 299, 'position' => 2, 'is_active' => true, 'allow_single_purchase' => false,
+]);
+$onlyBundleId = $catalog->createBundle([
+    'name' => 'Mixed set', 'description' => '', 'price' => 399, 'position' => 1, 'is_active' => true,
+], [$standalone, $bundleOnly]);
+$store = catalog_storefront();
+check(count($store['videos']) === 1 && (int) $store['videos'][0]['id'] === $standalone,
+    'bundle-only video is omitted from the single-purchase catalog');
+check(catalog_product('video', $bundleOnly) === null,
+    'server-side product lookup refuses a standalone purchase of a bundle-only video');
+check(catalog_product('video', $bundleOnly, false) !== null,
+    'a paid/in-flight video purchase can still resolve after availability changes');
+$onlyBundle = $catalog->bundle($onlyBundleId);
+check($onlyBundle['single_sale_count'] === 1 && $onlyBundle['bundle_only_count'] === 1,
+    'bundle reports its individually available and bundle-only video counts');
+check(abs($onlyBundle['single_total'] - 199.0) < 0.001 && $onlyBundle['savings'] === 0.0,
+    'bundle does not claim savings against an unavailable single price');
+check($onlyBundle['all_single_sale'] === false,
+    'bundle comparison is disabled when any included video is bundle-only');
+
+$hidden = $catalog->createVideo([
+    'title' => 'Hidden video', 'description' => '', 'youtube_url' => 'https://youtu.be/ccccccccccc',
+    'price' => 99, 'position' => 3, 'is_active' => false, 'allow_single_purchase' => true,
+]);
+$hiddenBundleId = $catalog->createBundle([
+    'name' => 'Bundle with hidden video', 'description' => '', 'price' => 250, 'position' => 2, 'is_active' => true,
+], [$standalone, $hidden]);
+$hiddenBundle = $catalog->bundle($hiddenBundleId);
+check($hiddenBundle['single_sale_count'] === 1 && $hiddenBundle['bundle_only_count'] === 1,
+    'hidden videos are not counted as individually available even when the flag is enabled');
+check($hiddenBundle['all_single_sale'] === false && $hiddenBundle['savings'] === 0.0,
+    'hidden videos never create a false separate-price comparison');
+
+$catalog->setSinglePurchaseAvailability($bundleOnly, true);
+$enabled = $catalog->video($bundleOnly);
+check($enabled['allow_single_purchase'] === true,
+    'the bundle editor can enable individual purchase for its video');
+$comparable = $catalog->bundle($onlyBundleId);
+check($comparable['all_single_sale'] === true && abs($comparable['savings'] - 99.0) < 0.001,
+    'enabling single purchase restores a truthful bundle-saving comparison');
 
 // The store-wide price setting is gone for good.
 $settingsModel = (string) file_get_contents('/app/lib/settings.php');

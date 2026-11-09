@@ -6,7 +6,7 @@ $currency = (string) $settings['currency'];
 <div class="page-head">
     <div>
         <h2>Video library</h2>
-        <p class="muted small">Each video has its own price. Visitors can buy one video or a bundle.</p>
+        <p class="muted small">Choose whether each video can be bought individually or only as part of a bundle.</p>
     </div>
     <a class="btn btn--primary" href="<?= e(url('admin/video.php')) ?>"><?= icon('upload', 16) ?> Add video</a>
 </div>
@@ -54,8 +54,8 @@ $currency = (string) $settings['currency'];
                         <td data-label="In bundles"><?= (int) $video['bundles'] ?></td>
                         <td data-label="Sold"><?= (int) $video['sales'] ?></td>
                         <td data-label="Status">
-                            <span class="badge <?= $video['is_active'] ? 'badge--success' : 'badge--muted' ?>">
-                                <?= $video['is_active'] ? 'On sale' : 'Hidden' ?>
+                            <span class="badge <?= !$video['is_active'] ? 'badge--muted' : ($video['allow_single_purchase'] ? 'badge--success' : 'badge--info') ?>">
+                                <?= !$video['is_active'] ? 'Hidden' : ($video['allow_single_purchase'] ? 'On sale' : 'Bundle only') ?>
                             </span>
                         </td>
                         <td class="cell-actions">

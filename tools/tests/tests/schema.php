@@ -1,6 +1,6 @@
 <?php
 /**
- * Schema tests: v3 definitions, drift detection, upgrade paths.
+ * Schema tests: v4 definitions, drift detection, upgrade paths.
  * Executed by run-schema.mjs inside php-wasm.
  */
 
@@ -26,7 +26,7 @@ function check($condition, $label)
 // Definition
 // ---------------------------------------------------------------------------
 $tables = Schema::tables();
-check(Schema::VERSION === 3, 'Schema::VERSION is 3, got ' . Schema::VERSION);
+check(Schema::VERSION === 4, 'Schema::VERSION is 4, got ' . Schema::VERSION);
 
 foreach (['settings', 'admin_users', 'payments', 'payment_events', 'videos', 'bundles', 'bundle_items', 'payment_videos', 'rate_events'] as $table) {
     check(isset($tables[$table]), 'table definition present: ' . $table);
@@ -36,6 +36,9 @@ foreach (['product_type', 'product_id', 'product_name'] as $column) {
 }
 check(stripos($tables['settings']['columns']['access_days'], 'DEFAULT 0') !== false,
     'settings.access_days defaults to 0 (lifetime)');
+check(isset($tables['videos']['columns']['allow_single_purchase']), 'videos.allow_single_purchase is defined');
+check(stripos($tables['videos']['columns']['allow_single_purchase'], 'DEFAULT 1') !== false,
+    'videos.allow_single_purchase defaults to enabled for existing videos');
 check(isset($tables['bundle_items']['indexes']['uniq_bundle_video']), 'bundle_items unique index');
 check(isset($tables['payment_videos']['indexes']['uniq_payment_video']), 'payment_videos unique index');
 check(stripos($tables['payments']['columns']['access_expires_at'], 'NOT NULL') === false,
@@ -71,8 +74,8 @@ foreach (['videos', 'bundles', 'bundle_items', 'payment_videos', 'settings'] as 
 $db = FakeDatabase::reset();
 $db->install(true);
 Schema::clearMarker();
-check(Schema::isCurrent($db) === true, 'v3 database is current');
-check(Schema::missing($db) === [], 'nothing missing on a v3 database: ' . json_encode(Schema::missing($db)));
+check(Schema::isCurrent($db) === true, 'v4 database is current');
+check(Schema::missing($db) === [], 'nothing missing on a v4 database: ' . json_encode(Schema::missing($db)));
 
 $db->dropTable('payment_videos');
 Schema::clearMarker();
@@ -92,7 +95,25 @@ Schema::clearMarker();
 check(stripos(implode(' | ', Schema::missing($db)), 'payments.order_id') !== false, 'v1 NOT NULL order_id is reported');
 
 // ---------------------------------------------------------------------------
-// v2 → v3 upgrade
+// v3 → v4: existing videos remain available for single purchase by default
+// ---------------------------------------------------------------------------
+$db = FakeDatabase::reset();
+$db->install(true);
+$db->add('videos', [
+    'title' => 'Existing video', 'description' => '', 'youtube_url' => 'https://youtu.be/aaaaaaaaaaa',
+    'price' => '199.00', 'position' => 1, 'is_active' => 1,
+]);
+unset($db->schema['videos']['allow_single_purchase']);
+unset($db->tables['videos'][0]['allow_single_purchase']);
+Schema::clearMarker();
+$upgrade = Schema::migrate($db);
+check($upgrade['ok'] === true, 'v3 upgrade reports ok: ' . json_encode($upgrade['errors']));
+check(in_array('videos.allow_single_purchase', $upgrade['columns_added'], true), 'v3 upgrade adds the single-purchase flag');
+check((int) $db->tables['videos'][0]['allow_single_purchase'] === 1, 'v3 videos stay enabled for individual sale');
+check(Schema::missing($db) === [], 'v3 database is current after v4 migration');
+
+// ---------------------------------------------------------------------------
+// v2 → v4 upgrade (legacy single video → library)
 // ---------------------------------------------------------------------------
 $db = FakeDatabase::reset();
 $db->install(false);

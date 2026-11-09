@@ -43,7 +43,14 @@ $currency = (string) $settings['currency'];
                     <?php endif; ?>
                     <ul class="bundle-row__videos">
                         <?php foreach ($bundle['videos'] as $video): ?>
-                            <li><?= icon('play', 12) ?> <?= e($video['title']) ?> <span class="muted tiny"><?= e(money((float) $video['price'], $currency)) ?></span></li>
+                            <li>
+                                <?= icon('play', 12) ?> <?= e($video['title']) ?>
+                                <span class="muted tiny">
+                                    <?= $video['is_active'] && $video['allow_single_purchase']
+                                        ? e(money((float) $video['price'], $currency))
+                                        : 'bundle only' ?>
+                                </span>
+                            </li>
                         <?php endforeach; ?>
                         <?php if (empty($bundle['videos'])): ?>
                             <li class="muted">No videos selected.</li>
@@ -53,11 +60,11 @@ $currency = (string) $settings['currency'];
                 <div class="bundle-row__side">
                     <p class="price-tag">
                         <?= e(money((float) $bundle['price'], $currency)) ?>
-                        <?php if ($bundle['single_total'] > 0): ?>
+                        <?php if ($bundle['all_single_sale'] && $bundle['savings'] > 0): ?>
                             <span class="price-tag__was"><?= e(money($bundle['single_total'], $currency)) ?></span>
                         <?php endif; ?>
                     </p>
-                    <p class="muted tiny"><?= (int) $bundle['video_count'] ?> video(s) · <?= (int) $bundle['sales'] ?> sold</p>
+                    <p class="muted tiny"><?= (int) $bundle['video_count'] ?> video(s) · <?= (int) $bundle['sales'] ?> sold<?php if ($bundle['bundle_only_count'] > 0): ?> · <?= (int) $bundle['bundle_only_count'] ?> bundle-only<?php endif; ?></p>
                     <div class="row-actions">
                         <a class="btn btn--ghost btn--xs" href="<?= e(url('admin/bundle.php?id=' . (int) $bundle['id'])) ?>">
                             <?= icon('sliders', 14) ?> Edit

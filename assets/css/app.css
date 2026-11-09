@@ -1040,14 +1040,15 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 
 .picker { display: grid; gap: 8px; max-height: 26rem; overflow-y: auto; padding-right: 4px; }
 .picker__item {
-    position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 12px;
-    border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, 205px); align-items: center; gap: 12px; padding: 9px 12px;
+    border: 1px solid var(--line); border-radius: 10px;
     background: rgba(148, 163, 184, .04); transition: border-color .15s, background .15s;
 }
 .picker__item:hover { border-color: rgba(148, 163, 184, .32); }
 .picker__item.is-muted { opacity: .62; }
-.picker__item input { position: absolute; opacity: 0; pointer-events: none; }
-.picker__item img, .picker__thumb {
+.picker__select { position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; cursor: pointer; }
+.picker__select input { position: absolute; opacity: 0; pointer-events: none; }
+.picker__select img, .picker__thumb {
     width: 80px; height: 45px; object-fit: cover; border-radius: 6px; flex: none;
     display: grid; place-items: center; background: rgba(148, 163, 184, .1); color: var(--muted);
 }
@@ -1057,6 +1058,8 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
     margin-left: auto; width: 22px; height: 22px; flex: none; display: grid; place-items: center;
     border-radius: 50%; border: 1px solid var(--line); color: transparent;
 }
+.picker__single { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: .72rem; font-weight: 600; }
+.picker__single .input { min-height: 36px; padding: 6px 9px; font-size: .8rem; }
 .picker__item:has(input:checked) { border-color: rgba(99, 102, 241, .6); background: rgba(99, 102, 241, .12); }
 .picker__item:has(input:checked) .picker__check { background: var(--accent, #6366f1); border-color: transparent; color: #fff; }
 .picker__item:focus-within { outline: 2px solid rgba(99, 102, 241, .55); outline-offset: 2px; }
@@ -1516,8 +1519,11 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
     .bundle-row .row-actions .btn { flex: 1 1 auto; min-height: 40px; }
     .bundle-row .row-actions .inline-form .btn { width: 100%; }
     .picker { max-height: 22rem; }
-    .picker__item { padding: 10px; min-height: 58px; }
-    .picker__item img, .picker__thumb { width: 64px; height: 36px; }
+    .picker__item { grid-template-columns: 1fr; gap: 8px; padding: 10px; }
+    .picker__select { min-height: 44px; }
+    .picker__select img, .picker__thumb { width: 64px; height: 36px; }
+    .picker__single { grid-template-columns: 1fr; }
+    .picker__single .input { min-height: 42px; font-size: 16px; }
     .copy-row { flex-direction: column; align-items: stretch; }
     .copy-row .btn { width: 100%; }
 

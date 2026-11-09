@@ -88,6 +88,13 @@ $embed = youtube_embed_url($value('youtube_url', ''));
             </label>
             <p class="hint">Hidden videos stay in existing customers' libraries but disappear from the shop.</p>
 
+            <label class="switch" style="margin-top:16px">
+                <input type="checkbox" name="allow_single_purchase" value="1" <?= !empty($form['allow_single_purchase']) ? 'checked' : '' ?>>
+                <span class="switch__track"><span class="switch__thumb"></span></span>
+                <span class="switch__label">Available for single purchase</span>
+            </label>
+            <p class="hint">Turn this off to remove it from single-video sales. It will be buyable only if included in an on-sale bundle; this choice applies across all bundles containing it.</p>
+
             <?php if ($isEdit): ?>
                 <dl class="detail-list" style="margin-top:16px">
                     <div><dt>Sold</dt><dd><?= (int) app()->catalog->videoSales((int) $video['id']) ?> time(s)</dd></div>

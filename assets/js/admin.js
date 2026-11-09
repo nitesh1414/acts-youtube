@@ -205,12 +205,27 @@
         };
         const refreshTotal = () => {
             let total = 0;
-            picker.querySelectorAll('input[type=checkbox]:checked').forEach(box => {
-                total += Number(prices[box.value] || 0);
+            let selectedCount = 0;
+            let singleCount = 0;
+            picker.querySelectorAll('.picker__item').forEach(row => {
+                const video = row.querySelector('input[type=checkbox][name="video_ids[]"]');
+                if (!video || !video.checked) { return; }
+                selectedCount++;
+                const availability = row.querySelector('select[name^="allow_single_purchase["]');
+                if (availability && availability.value === '1' && !row.classList.contains('is-muted')) {
+                    total += Number(prices[video.value] || 0);
+                    singleCount++;
+                }
             });
-            bundleTotal.textContent = total > 0
-                ? format(total) + ' across ' + picker.querySelectorAll('input[type=checkbox]:checked').length + ' video(s)'
-                : 'nothing selected yet';
+            const bundleOnlyCount = selectedCount - singleCount;
+            if (total > 0) {
+                bundleTotal.textContent = format(total) + ' across ' + singleCount + ' individually available video(s)'
+                    + (bundleOnlyCount > 0 ? ' · ' + bundleOnlyCount + ' bundle-only/hidden' : '');
+            } else if (selectedCount > 0) {
+                bundleTotal.textContent = 'no individual prices (selected videos are bundle-only or hidden)';
+            } else {
+                bundleTotal.textContent = 'nothing selected yet';
+            }
         };
         picker.addEventListener('change', refreshTotal);
         refreshTotal();

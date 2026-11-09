@@ -127,7 +127,7 @@ seed_bundle($db);
         'Also in <strong>Season One — Complete</strong>',
         'id="save-hint"',
         'Season One — Complete includes this video',
-        'keep just this one if that is all you want',
+        'The bundle unlocks all 2 videos for one payment. The single-video choice stays yours.',
         'data-suggest-id="1"',
         'data-suggest-badge="Bundle saves ₹99"',
         'id="save-hint-badge-text">Bundle saves ₹99',
@@ -172,6 +172,39 @@ $db->add('bundle_items', ['bundle_id' => 1, 'video_id' => 3, 'position' => 3, 'c
     hasNot: ['Fatal error', 'Warning:'],
     count: [['bundle-card__shot', 2]],
 });
+
+scenario('home-bundle-only-video', `
+seed_videos($db);
+seed_bundle($db);
+$db->tables['videos'][1]['allow_single_purchase'] = 0;
+`, 'index.php', {
+    has: [
+        'data-product-card="bundle:1"', 'data-product-card="video:1"',
+        'Episode Two — The Return', 'Bundle only', 'Videos available on their own',
+    ],
+    hasNot: [
+        'data-product-card="video:2"', '₹498 separately', 'Save ₹99',
+        'Fatal error', 'Warning:',
+    ],
+});
+
+scenario('home-bundle-only-selected', `
+seed_videos($db);
+seed_bundle($db);
+$db->tables['videos'][1]['allow_single_purchase'] = 0;
+`, 'index.php', {
+    has: ['data-product-card="bundle:1"', 'id="save-hint"', 'Pick a video or a bundle first'],
+    hasNot: ['₹498 separately', 'Save ₹99', 'You save ₹99', 'Fatal error', 'Warning:'],
+}, { query: '?buy=bundle:1', get: { buy: 'bundle:1' } });
+
+scenario('home-bundle-only-stale-link', `
+seed_videos($db);
+seed_bundle($db);
+$db->tables['videos'][1]['allow_single_purchase'] = 0;
+`, 'index.php', {
+    has: ['<section class="section is-unpicked" id="checkout">', 'Pick a video or a bundle first', 'data-buy-bar hidden'],
+    hasNot: ['Fatal error', 'Warning:'],
+}, { query: '?buy=video:2', get: { buy: 'video:2' } });
 
 scenario('home-limited-access', `
 $db->tables["settings"][0]["access_days"] = "30";
@@ -391,12 +424,12 @@ scenario('admin-videos-empty', '', 'admin/videos.php', {
 }, { login: true });
 
 scenario('admin-video-new', '', 'admin/video.php', {
-    has: ['New video', 'YouTube link', 'name="price"', 'name="youtube_url"', 'Order in the library'],
+    has: ['New video', 'YouTube link', 'name="price"', 'name="youtube_url"', 'name="allow_single_purchase"', 'Available for single purchase', 'Order in the library'],
     hasNot: ['Fatal error', 'Warning:'],
 }, { login: true });
 
 scenario('admin-video-edit', `seed_videos($db);`, 'admin/video.php', {
-    has: ['Video details', 'Episode One', 'value="199"', 'Delete video', 'Sold'],
+    has: ['Video details', 'Episode One', 'value="199"', 'Available for single purchase', 'Delete video', 'Sold'],
     hasNot: ['Fatal error', 'Warning:'],
 }, { login: true, get: { id: '1' }, query: '?id=1' });
 
@@ -424,7 +457,7 @@ scenario('admin-bundles-empty', '', 'admin/bundles.php', {
 }, { login: true });
 
 scenario('admin-bundle-new', `seed_videos($db);`, 'admin/bundle.php', {
-    has: ['New bundle', 'name="name"', 'name="video_ids[]"', 'Episode One', 'Bundle price', 'data-prices='],
+    has: ['New bundle', 'name="name"', 'name="video_ids[]"', 'allow_single_purchase[1]', 'Also sell on its own', 'Bundle only', 'Episode One', 'Bundle price', 'data-prices='],
     hasNot: ['Fatal error', 'Warning:'],
 }, { login: true });
 
@@ -435,6 +468,30 @@ seed_bundle($db);
     has: ['Bundle details', 'Season One — Complete', 'checked', 'Delete bundle', 'Saving is live', 'Update reaches'],
     hasNot: ['Fatal error', 'Warning:'],
 }, { login: true, get: { id: '1' }, query: '?id=1' });
+
+scenario('admin-bundle-rejects-overprice', `seed_videos($db);`, 'admin/bundle.php', {
+    has: ['This bundle costs more than the 2 videos bought separately', '₹498'],
+    hasNot: ['http-equiv="refresh"', 'Fatal error', 'Warning:'],
+}, {
+    login: true, csrf: true,
+    post: {
+        action: 'save', name: 'Season One — Complete', description: '',
+        price: '500', position: '1', is_active: '1', video_ids: { 0: '1', 1: '2' },
+        allow_single_purchase: { 1: '1', 2: '1', 3: '1' },
+    },
+});
+
+scenario('admin-bundle-only-price-not-compared', `seed_videos($db);`, 'admin/bundle.php', {
+    has: ['http-equiv="refresh"', 'admin/bundles.php'],
+    hasNot: ['This bundle costs more than', 'Fatal error', 'Warning:'],
+}, {
+    login: true, csrf: true, redirect: true,
+    post: {
+        action: 'save', name: 'Bundle-only set', description: '',
+        price: '500', position: '1', is_active: '1', video_ids: { 0: '1', 1: '2' },
+        allow_single_purchase: { 1: '1', 2: '0', 3: '1' },
+    },
+});
 
 // Saving a bundle through the real controller: the new video is unlocked for
 // the customer who already paid, and the admin is told so.
@@ -458,6 +515,7 @@ seed_payment($db);
         action: 'save', name: 'Season One — Complete', description: 'Both episodes, one payment.',
         price: '399', position: '1', is_active: '1', 'video_ids[]': '3',
         video_ids: { 0: '1', 1: '2', 2: '3' },
+        allow_single_purchase: { 1: '1', 2: '0', 3: '1' },
     },
 });
 

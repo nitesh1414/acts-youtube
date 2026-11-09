@@ -62,7 +62,7 @@ final class FakeDatabase implements DatabaseInterface
                     'Type'    => 'varchar(255)',
                     'Null'    => stripos((string) $sql, 'NOT NULL') !== false ? 'NO' : 'YES',
                     'Key'     => '',
-                    'Default' => null,
+                    'Default' => $this->defaultValue((string) $sql),
                     'Extra'   => stripos((string) $sql, 'AUTO_INCREMENT') !== false ? 'auto_increment' : '',
                 ];
             }
@@ -89,6 +89,18 @@ final class FakeDatabase implements DatabaseInterface
         }
         $this->tables[$table][] = $row;
         return (int) $row['id'];
+    }
+
+    private function defaultValue($definition)
+    {
+        if (!preg_match('/\bDEFAULT\s+(?:\'([^\']*)\'|([^\s,]+))/i', (string) $definition, $match)) {
+            return null;
+        }
+        $value = isset($match[1]) && $match[1] !== '' ? $match[1] : ($match[2] ?? '');
+        if (strtoupper($value) === 'NULL') {
+            return null;
+        }
+        return is_numeric($value) ? $value + 0 : $value;
     }
 
     private function nextId($table)
@@ -227,7 +239,7 @@ final class FakeDatabase implements DatabaseInterface
                     $this->schema[$name][$column] = [
                         'Field' => $column, 'Type' => 'varchar(255)',
                         'Null' => stripos((string) $definition, 'NOT NULL') !== false ? 'NO' : 'YES',
-                        'Key' => '', 'Default' => null,
+                        'Key' => '', 'Default' => $this->defaultValue((string) $definition),
                         'Extra' => stripos((string) $definition, 'AUTO_INCREMENT') !== false ? 'auto_increment' : '',
                     ];
                 }
@@ -242,13 +254,16 @@ final class FakeDatabase implements DatabaseInterface
                 $this->schema[$name][$column] = [
                     'Field' => $column, 'Type' => 'varchar(255)',
                     'Null' => stripos($m[3], 'NOT NULL') !== false ? 'NO' : 'YES',
-                    'Key' => '', 'Default' => null,
+                    'Key' => '', 'Default' => $this->defaultValue($m[3]),
                     'Extra' => stripos($m[3], 'AUTO_INCREMENT') !== false ? 'auto_increment' : '',
                 ];
             }
+            $default = $this->defaultValue($m[3]);
             foreach ($this->tables[$name] ?? [] as $index => $row) {
                 if (!array_key_exists($column, $row)) {
-                    $this->tables[$name][$index][$column] = null;
+                    // MySQL backfills an added column with its default; model
+                    // that for migration tests (especially default-on flags).
+                    $this->tables[$name][$index][$column] = $default;
                 }
             }
             return;

@@ -67,6 +67,7 @@ $db->tables['payments'][0]['access_token'] = '${TOKEN}';
 `;
 
 await render('home', shop, 'index.php');
+await render('home-bundle-only', "seed_videos($db); seed_bundle($db); $db->tables['videos'][1]['allow_single_purchase'] = 0;" + REAL_THUMBS, 'index.php');
 await render('home-buy-video', shop, 'index.php', { buy: 'video:1' });
 await render('home-buy-bundle', shop, 'index.php', { buy: 'bundle:1' });
 
@@ -78,6 +79,7 @@ await render('home-purchased-bundle', buyer, 'index.php', { buy: 'bundle:1' });
 await render('library', library, 'success.php', { t: TOKEN });
 await render('admin-videos', shop + 'seed_payment($db); fake_login();', 'admin/videos.php');
 await render('admin-bundles', 'seed_videos($db); seed_bundle($db); fake_login();', 'admin/bundles.php');
+await render('admin-bundle', 'seed_videos($db); seed_bundle($db); fake_login();', 'admin/bundle.php', { id: '1' });
 
 const adminShop = shop + `
 seed_payment($db, ['order_id' => 'order_A', 'payment_id' => 'pay_A'], [1]);

@@ -2,11 +2,10 @@
 /**
  * Landing page.
  *
- * Order matters: visitors first see everything that is for sale — every video
- * with its own price and every named bundle — and only then the checkout card
- * for whatever they picked. When a single video is also part of a bundle, the
- * card points out what the bundle would cost and what it saves, but the buyer
- * always stays in control of what they pay for.
+ * Order matters: visitors first see every named bundle and every video available
+ * for single purchase, and only then the checkout card for whatever they picked.
+ * When a single-sale video is also part of a bundle, the card compares prices only
+ * when every included video is individually available; the buyer always decides.
  *
  * @var array<string, mixed>            $settings
  * @var array<string, mixed>            $storefront videos, bundles
@@ -21,7 +20,17 @@ $channel = (string) $settings['youtube_channel_url'];
 $videos = $storefront['videos'];
 $bundles = $storefront['bundles'];
 $hasProducts = $selected !== null;
-$totalVideos = count($videos);
+$singleVideoCount = count($videos);
+$publicVideoIds = [];
+foreach ($videos as $video) {
+    $publicVideoIds[(int) $video['id']] = true;
+}
+foreach ($bundles as $bundle) {
+    foreach ($bundle['videos'] as $video) {
+        $publicVideoIds[(int) $video['id']] = true;
+    }
+}
+$totalVideos = count($publicVideoIds);
 $totalBundles = count($bundles);
 
 $access = current_access_payment();
@@ -77,10 +86,22 @@ if ($selected !== null && $selected['videos'] !== []) {
     $selectedWatchId = (int) $selected['videos'][0]['id'];
 }
 
-// Only an explicit ?buy=video:2 / ?buy=bundle:1 link counts as a pick. A plain
-// visit preselects the first product so the form has values ready, but nobody
-// is "buying" yet: the checkout stays behind a prompt until a card is chosen.
-$explicitPick = trim((string) query_str('buy')) !== '';
+// Only a ?buy= link that points to a product still on sale counts as a pick.
+// A stale link (for example, a video now set to bundle-only) may prepare the
+// first available product, but it must not open checkout for that fallback.
+$requestedProduct = trim((string) query_str('buy'));
+$explicitPick = false;
+if (preg_match('/^(video|bundle)[:_-]?(\d+)$/i', $requestedProduct, $requestedMatch)) {
+    $requestedType = strtolower($requestedMatch[1]);
+    $requestedId = (int) $requestedMatch[2];
+    $requestedItems = $requestedType === 'video' ? $videos : $bundles;
+    foreach ($requestedItems as $requestedItem) {
+        if ((int) $requestedItem['id'] === $requestedId) {
+            $explicitPick = true;
+            break;
+        }
+    }
+}
 $gateCheckout = $selected !== null && !$selectedOwned && !$explicitPick;
 
 $priceLabel = $selected !== null ? money((float) $selected['price'], $currency) : '';
@@ -99,16 +120,37 @@ $selectedSavings = $selected !== null && $selected['type'] === 'bundle' && isset
 /** Bundle → hint copy shared by the cards and the checkout box. */
 $hint = function (array $bundle) use ($currency) {
     $count = max(1, (int) $bundle['video_count']);
+    $singleCount = (int) $bundle['single_sale_count'];
+    $bundleOnlyCount = (int) $bundle['bundle_only_count'];
+    $canCompare = !empty($bundle['all_single_sale']);
     $price = money((float) $bundle['price'], $currency);
     $single = money((float) $bundle['single_total'], $currency);
     $savings = money((float) $bundle['savings'], $currency);
     $each = money((float) $bundle['price'] / $count, $currency);
 
     $text = $price . ' for ' . $count . ' videos';
-    if ($count > 1) {
-        $text .= ' · ' . $each . ' each';
+    if ($canCompare) {
+        if ($count > 1) {
+            $text .= ' · ' . $each . ' each';
+        }
+        $text .= ' (' . $single . ' separately)';
+    } else {
+        $text .= ' · ' . $singleCount . ' available individually';
+        if ($bundleOnlyCount > 0) {
+            $text .= ' + ' . $bundleOnlyCount . ' bundle-only';
+        }
     }
-    $text .= ' (' . $single . ' separately)';
+
+    if ($canCompare && (float) $bundle['savings'] > 0) {
+        $badge = 'Bundle saves ' . $savings;
+        $note = 'The bundle unlocks all ' . $count . ' videos for one payment. The single-video choice stays yours.';
+    } else {
+        $badge = $bundleOnlyCount > 0 ? 'Includes bundle-only videos' : 'Get the complete set';
+        $note = $bundleOnlyCount > 0
+            ? 'The bundle includes ' . $bundleOnlyCount . ' video' . ($bundleOnlyCount === 1 ? '' : 's')
+                . ' that are not sold individually. The single-video choice stays yours.'
+            : 'The bundle unlocks every video in the set at once.';
+    }
 
     return [
         'type'   => 'bundle',
@@ -117,12 +159,10 @@ $hint = function (array $bundle) use ($currency) {
         'price'  => (int) round((float) $bundle['price'] * 100),
         'label'  => $price,
         'period' => $count . ' video' . ($count === 1 ? '' : 's'),
-        'badge'  => 'Bundle saves ' . $savings,
+        'badge'  => $badge,
         'title'  => (string) $bundle['name'] . ' includes this video',
         'text'   => $text,
-        'note'   => 'It costs more than this one video because you get '
-            . ($count > 1 ? 'all ' . $count . ' videos' : 'the whole set')
-            . ' — keep just this one if that is all you want.',
+        'note'   => $note,
     ];
 };
 
@@ -151,7 +191,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
             <li><?= icon('check-circle', 18) ?> Instant access right after payment</li>
             <li><?= icon('shield', 18) ?> Secure checkout — UPI, cards, netbanking &amp; wallets</li>
             <li><?= icon('clock', 18) ?> <?= e($accessNote) ?></li>
-            <li><?= icon('tag', 18) ?> <?= $totalBundles > 0 ? 'Money-saving bundles first, single videos too' : 'Every video priced on its own' ?></li>
+            <li><?= icon('tag', 18) ?> <?= $totalBundles > 0 ? ($singleVideoCount > 0 ? 'Bundles first, plus videos sold individually' : 'Choose from complete video bundles') : ($singleVideoCount > 0 ? 'Individual videos have their own prices' : 'No videos are on sale right now') ?></li>
         </ul>
 
         <div class="hero__actions">
@@ -160,9 +200,11 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                     <a class="btn btn--primary" href="#bundles">
                         <?= icon('tag', 17) ?> See the bundles first
                     </a>
-                    <a class="btn btn--ghost" href="#library">
-                        <?= icon('play', 17) ?> Browse all videos
-                    </a>
+                    <?php if ($videos !== []): ?>
+                        <a class="btn btn--ghost" href="#library">
+                            <?= icon('play', 17) ?> Browse single videos
+                        </a>
+                    <?php endif; ?>
                 <?php else: ?>
                     <a class="btn btn--primary" href="#library">
                         <?= icon('play', 17) ?> Browse the videos
@@ -211,11 +253,12 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
 
 <?php if ($bundles !== []): ?>
     <section class="section" id="bundles">
+        <?php if ($videos === []): ?><span id="library"></span><?php endif; ?>
         <div class="wrap section__inner">
             <header class="section__head">
                 <span class="eyebrow">Start here · Bundles</span>
                 <h2>More videos, one payment</h2>
-                <p>A <strong>named bundle</strong> is several videos sold together. Pay once and every video in it stays in your library — always cheaper than buying the same videos one by one, and the saving is printed on each bundle.</p>
+                <p>A <strong>named bundle</strong> is several videos sold together. Pay once and every video in it stays in your library. When every video is also available individually, we show the bundle saving; some videos may be bundle-only.</p>
             </header>
 
             <div class="bundles">
@@ -233,6 +276,24 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                         }
                     }
                     $bundleWatchId = $bundle['videos'] !== [] ? (int) $bundle['videos'][0]['id'] : 0;
+                    $bundleOnlyCount = (int) $bundle['bundle_only_count'];
+                    $bundleSavingsText = money((float) $bundle['price'], $currency) . ' for '
+                        . (int) $bundle['video_count'] . ' video' . ((int) $bundle['video_count'] === 1 ? '' : 's');
+                    if (!empty($bundle['all_single_sale'])) {
+                        $bundleSavingsText .= ' (' . money((float) $bundle['single_total'], $currency) . ' separately)';
+                    } else {
+                        $bundleSavingsText .= ' · ' . (int) $bundle['single_sale_count'] . ' available individually';
+                        if ($bundleOnlyCount > 0) {
+                            $bundleSavingsText .= ' + ' . $bundleOnlyCount . ' bundle-only';
+                        }
+                    }
+                    $bundleSavingsBadge = $savings > 0
+                        ? 'You save ' . money($savings, $currency)
+                        : ($bundleOnlyCount > 0 ? 'Includes bundle-only videos' : 'Get the complete set');
+                    $bundleSavingsNote = $bundleOnlyCount > 0
+                        ? 'Includes ' . $bundleOnlyCount . ' video' . ($bundleOnlyCount === 1 ? '' : 's')
+                            . ' not sold individually; one payment unlocks the entire set.'
+                        : 'One payment unlocks every video in the bundle — or pick a single video above if that suits you better.';
                     ?>
                     <?php
                     // The bundle's own picture: the thumbnails of the videos in it,
@@ -259,7 +320,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
 
                         <div class="bundle-card__head">
                             <div>
-                                <span class="chip chip--secure"><?= icon('tag', 13) ?> Bundle · <?= (int) $bundle['video_count'] ?> videos</span>
+                                <span class="chip chip--secure"><?= icon('tag', 13) ?> Bundle · <?= (int) $bundle['video_count'] ?> video<?= (int) $bundle['video_count'] === 1 ? '' : 's' ?></span>
                                 <?php if ($bundleBought): ?>
                                     <span class="chip chip--owned"><?= icon('check', 13) ?> Purchased</span>
                                 <?php elseif ($bundleCovered): ?>
@@ -287,8 +348,10 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                                     <span><?= e($video['title']) ?></span>
                                     <?php if ($rowOwned): ?>
                                         <span class="bundle-card__tick"><?= icon('check', 12) ?> Owned</span>
-                                    <?php else: ?>
+                                    <?php elseif ($video['is_active'] && $video['allow_single_purchase']): ?>
                                         <span class="muted tiny"><?= e(money((float) $video['price'], $currency)) ?></span>
+                                    <?php else: ?>
+                                        <span class="muted tiny">Bundle only</span>
                                     <?php endif; ?>
                                 </li>
                             <?php endforeach; ?>
@@ -318,12 +381,12 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                                data-name="<?= e($bundle['name']) ?>"
                                data-price="<?= (int) round((float) $bundle['price'] * 100) ?>"
                                data-label="<?= e(money((float) $bundle['price'], $currency)) ?>"
-                               data-period="<?= (int) $bundle['video_count'] ?> videos"
+                               data-period="<?= (int) $bundle['video_count'] ?> video<?= (int) $bundle['video_count'] === 1 ? '' : 's' ?>"
                                data-savings="<?= (int) round($savings * 100) ?>"
-                               data-savings-badge="You save <?= e(money($savings, $currency)) ?>"
+                               data-savings-badge="<?= e($bundleSavingsBadge) ?>"
                                data-savings-title="<?= e($bundle['name']) ?>"
-                               data-savings-text="<?= e(money((float) $bundle['price'], $currency)) ?> for <?= (int) $bundle['video_count'] ?> videos (<?= e(money((float) $bundle['single_total'], $currency)) ?> separately)"
-                               data-savings-note="One payment unlocks every video in the bundle — or pick a single video above if that suits you better.">
+                               data-savings-text="<?= e($bundleSavingsText) ?>"
+                               data-savings-note="<?= e($bundleSavingsNote) ?>">
                                 Choose this bundle
                             </a>
                         </div>
@@ -340,8 +403,8 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
         <div class="wrap section__inner">
             <header class="section__head">
                 <span class="eyebrow">Or buy a single video</span>
-                <h2>Every video, its own price</h2>
-                <p>Want just one? Each video is sold on its own — pay for that one and only that one is unlocked. If it is also part of a bundle we show you the bundle price and what it saves, so you can compare.</p>
+                <h2>Videos available on their own</h2>
+                <p>Want just one? Pay for a video listed here and only that video is unlocked. If it is also in a bundle, we show the bundle price and a saving when every video in that bundle is available individually. Other videos may be bundle-only.</p>
             </header>
 
             <div class="catalog">
@@ -384,8 +447,12 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                                     <span>
                                         Also in <strong><?= e($bundle['name']) ?></strong> —
                                         <?= e(money((float) $bundle['price'], $currency)) ?> for
-                                        <?= (int) $bundle['video_count'] ?> videos, save
-                                        <?= e(money((float) $bundle['savings'], $currency)) ?>
+                                        <?= (int) $bundle['video_count'] ?> videos
+                                        <?php if (!empty($bundle['all_single_sale']) && (float) $bundle['savings'] > 0): ?>
+                                            , save <?= e(money((float) $bundle['savings'], $currency)) ?>
+                                        <?php elseif ((int) $bundle['bundle_only_count'] > 0): ?>
+                                            · includes <?= (int) $bundle['bundle_only_count'] ?> bundle-only
+                                        <?php endif; ?>
                                     </span>
                                 </a>
                             <?php endif; ?>
@@ -475,7 +542,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                         price and the checkout appear right here, and nothing is charged until you press
                         <strong>Pay</strong>.
                     </p>
-                    <a class="btn btn--ghost btn--sm" href="#library">
+                    <a class="btn btn--ghost btn--sm" href="#<?= $videos !== [] ? 'library' : 'bundles' ?>">
                         <?= icon('play', 15) ?> See what is on sale
                     </a>
                 </div>
@@ -518,7 +585,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                                 <?php if ($selectedHint !== null): ?>
                                     <?= e($selectedHint['text']) ?>
                                 <?php elseif ($selectedSavings > 0): ?>
-                                    <?= e(money((float) $selected['price'], $currency)) ?> for <?= (int) $videoCount ?> videos
+                                    <?= e(money((float) $selected['price'], $currency)) ?> for <?= e($periodLabel) ?>
                                     (<?= e(money((float) $selected['price'] + $selectedSavings, $currency)) ?> separately)
                                 <?php endif; ?>
                             </p>
@@ -665,7 +732,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
                 <li class="step">
                     <span class="step__num">1</span>
                     <h3>Choose a video or bundle</h3>
-                    <p>Each video has its own price. Bundles group several videos for less than buying them separately.</p>
+                    <p>Choose an individual video or a bundle. Bundle savings are shown when all included videos are also available individually.</p>
                 </li>
                 <li class="step">
                     <span class="step__num">2</span>
@@ -691,15 +758,15 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
 
         <details class="faq" open>
             <summary>Can I buy just one video?</summary>
-            <p>Yes. Every video is listed with its own price — pay for that one and only that one is unlocked.</p>
+            <p>Yes, when the video is listed under “Videos available on their own”. Some videos may be sold only as part of a bundle.</p>
         </details>
         <details class="faq">
             <summary>What is a bundle?</summary>
-            <p>A named set of videos sold together for one price. Everything inside is unlocked at once, and the bundle stays in your library. If a video you picked is also in a bundle, we show you the bundle price and saving — but you can always keep buying just the single video.</p>
+            <p>A named set of videos sold together for one price. Everything inside is unlocked at once, and the bundle stays in your library. If every video is also sold individually, we show the bundle saving. Some videos may only be available in a bundle.</p>
         </details>
         <details class="faq">
             <summary>Is a bundle always the better deal?</summary>
-            <p>Per video it is cheaper — but it costs more than one single video because you get more of them. Compare both options on the checkout card and pick what suits you.</p>
+            <p>A bundle is one payment for the whole set. We show a saving only when every video in it is also available individually and the bundle costs less than buying them separately; when some videos are bundle-only, that comparison does not apply. Choose the option that suits you.</p>
         </details>
         <details class="faq">
             <summary>How long can I watch?</summary>
@@ -709,7 +776,7 @@ $hintAttrs = function (array $hint, $prefix = 'suggest') {
         </details>
         <details class="faq">
             <summary>I cleared my browser or changed device. Can I get access again?</summary>
-            <p>Yes. Open <a href="<?= e(url('restore.php')) ?>">Restore access</a> and enter the mobile number and name you paid with — no e-mail needed. We re-issue your access instantly.</p>
+            <p>Yes. Open <a href="<?= e(url('restore.php')) ?>">Restore access</a> and enter the mobile number you paid with — no name or e-mail needed. We re-issue your access instantly.</p>
         </details>
         <details class="faq">
             <summary>Which payment methods are supported?</summary>

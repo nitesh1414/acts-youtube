@@ -32,7 +32,9 @@ final class Catalog
     {
         $sql = 'SELECT * FROM videos';
         if ($activeOnly) {
-            $sql .= ' WHERE is_active = 1';
+            // In the storefront, a video is a standalone product only when it is
+            // published AND the owner has allowed individual purchases.
+            $sql .= ' WHERE is_active = 1 AND allow_single_purchase = 1';
         }
         $rows = $this->db->all($sql . ' ORDER BY position, id');
         return array_map([$this, 'decorateVideo'], $rows);
@@ -95,6 +97,11 @@ final class Catalog
         $row['id'] = (int) $row['id'];
         $row['price'] = (float) $row['price'];
         $row['is_active'] = (int) $row['is_active'] === 1;
+        // Missing values are treated as enabled for rows produced by older
+        // fixtures or a database that predates the additive migration.
+        $row['allow_single_purchase'] = !array_key_exists('allow_single_purchase', $row)
+            || $row['allow_single_purchase'] === null
+            || (int) $row['allow_single_purchase'] === 1;
         $row['position'] = (int) $row['position'];
         $row['youtube_id'] = youtube_id((string) $row['youtube_url']);
         $row['embed_url'] = youtube_embed_url((string) $row['youtube_url']);
@@ -110,14 +117,29 @@ final class Catalog
     private function videoRow(array $data)
     {
         return [
-            'title'       => db_limit((string) $data['title'], 160),
-            'description' => trim((string) $data['description']) !== '' ? trim((string) $data['description']) : null,
-            'youtube_url' => db_limit((string) $data['youtube_url'], 255),
-            'price'       => number_format(max(0, (float) $data['price']), 2, '.', ''),
-            'position'    => (int) $data['position'],
-            'is_active'   => !empty($data['is_active']) ? 1 : 0,
-            'updated_at'  => now(),
+            'title'                  => db_limit((string) $data['title'], 160),
+            'description'            => trim((string) $data['description']) !== '' ? trim((string) $data['description']) : null,
+            'youtube_url'            => db_limit((string) $data['youtube_url'], 255),
+            'price'                  => number_format(max(0, (float) $data['price']), 2, '.', ''),
+            'position'               => (int) $data['position'],
+            'is_active'              => !empty($data['is_active']) ? 1 : 0,
+            'allow_single_purchase'  => (!array_key_exists('allow_single_purchase', $data)
+                || !empty($data['allow_single_purchase'])) ? 1 : 0,
+            'updated_at'             => now(),
         ];
+    }
+
+    /**
+     * Set whether a video can be purchased on its own. This is a video-level
+     * setting, so it applies everywhere the video appears, including every
+     * bundle editor that contains it.
+     */
+    public function setSinglePurchaseAvailability($videoId, $available)
+    {
+        $this->db->update('videos', [
+            'allow_single_purchase' => $available ? 1 : 0,
+            'updated_at'            => now(),
+        ], 'id = ?', [(int) $videoId]);
     }
 
     /**
@@ -208,12 +230,17 @@ final class Catalog
     {
         $items = [];
         $singleTotal = 0.0;
+        $singleSaleCount = 0;
         foreach ($videoIds as $videoId) {
             if (!isset($videos[$videoId])) {
                 continue; // Deleted video: keep the bundle usable.
             }
-            $items[] = $videos[$videoId];
-            $singleTotal += (float) $videos[$videoId]['price'];
+            $video = $videos[$videoId];
+            $items[] = $video;
+            if (!empty($video['is_active']) && !empty($video['allow_single_purchase'])) {
+                $singleTotal += (float) $video['price'];
+                $singleSaleCount++;
+            }
         }
 
         $row['id'] = (int) $row['id'];
@@ -225,8 +252,15 @@ final class Catalog
             return (int) $video['id'];
         }, $items);
         $row['video_count'] = count($items);
+        $row['single_sale_count'] = $singleSaleCount;
+        $row['all_single_sale'] = $items !== [] && $singleSaleCount === count($items);
+        $row['bundle_only_count'] = count($items) - $singleSaleCount;
         $row['single_total'] = $singleTotal;
-        $row['savings'] = max(0.0, $singleTotal - (float) $row['price']);
+        // Only claim a bundle saving when every included video can actually be
+        // purchased separately at the displayed price.
+        $row['savings'] = $row['all_single_sale']
+            ? max(0.0, $singleTotal - (float) $row['price'])
+            : 0.0;
         $row['thumbnail'] = isset($items[0]) ? $items[0]['thumbnail'] : '';
         return $row;
     }
@@ -441,7 +475,11 @@ final class Catalog
     public function counts()
     {
         return [
-            'videos'  => (int) $this->db->value('SELECT COUNT(*) FROM videos WHERE is_active = 1', [], 0),
+            'videos'  => (int) $this->db->value(
+                'SELECT COUNT(*) FROM videos WHERE is_active = 1 AND allow_single_purchase = 1',
+                [],
+                0
+            ),
             'bundles' => (int) $this->db->value('SELECT COUNT(*) FROM bundles WHERE is_active = 1', [], 0),
         ];
     }
@@ -468,7 +506,7 @@ function catalog_product($type, $id, $activeOnly = true)
 
     if ($type === 'video') {
         $video = $catalog->video($id);
-        if ($video === null || ($activeOnly && !$video['is_active'])) {
+        if ($video === null || ($activeOnly && (!$video['is_active'] || !$video['allow_single_purchase']))) {
             return null;
         }
         return [
@@ -496,6 +534,9 @@ function catalog_product($type, $id, $activeOnly = true)
             'thumbnail'   => (string) $bundle['thumbnail'],
             'description' => (string) ($bundle['description'] ?? ''),
             'single_total' => (float) $bundle['single_total'],
+            'single_sale_count' => (int) $bundle['single_sale_count'],
+            'all_single_sale' => (bool) $bundle['all_single_sale'],
+            'bundle_only_count' => (int) $bundle['bundle_only_count'],
             'savings'      => (float) $bundle['savings'],
             'video_count'  => (int) $bundle['video_count'],
         ];
@@ -776,7 +817,10 @@ function catalog_product_from_item($type, array $item)
         'description' => (string) ($item['description'] ?? ''),
         'video_count' => count($videos),
         'single_total' => $singleTotal,
-        'savings'     => $isBundle ? max(0.0, $singleTotal - $price) : 0.0,
+        'single_sale_count' => $isBundle ? (int) $item['single_sale_count'] : 1,
+        'all_single_sale' => $isBundle ? (bool) $item['all_single_sale'] : true,
+        'bundle_only_count' => $isBundle ? (int) $item['bundle_only_count'] : 0,
+        'savings' => $isBundle ? (float) $item['savings'] : 0.0,
     ];
 }
 

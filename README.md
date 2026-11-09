@@ -1,8 +1,9 @@
 # PayAccess — Core PHP + MySQL Paywall for Exclusive YouTube Videos
 
 A complete, production-ready pay-per-view app in **Core PHP (no framework) and MySQL**.
-Visitors pay through **Razorpay** and unlock a private (unlisted) YouTube video; the
-admin panel manages payments, branding, pricing and the video link.
+Visitors pay through **Razorpay** and unlock private (unlisted) YouTube videos from a
+library; the admin panel manages videos, bundles, single-purchase availability, payments
+and branding.
 
 Built for shared hosting (cPanel / XAMPP / WAMP / LAMP / any PHP 7.4+ host) — no Composer,
 no build step, no Node.js required.
@@ -35,15 +36,13 @@ no build step, no Node.js required.
 
 **Public site**
 
-- Conversion-focused storefront in this order: hero → **named bundles** (best value, sold
-  for one payment) → **every video with its own price** → the checkout card → how it works
-  → FAQ. Every buying option is shown *before* anything informational, and bundles are
-  always listed above the single videos.
-- **Bundle savings nudge**: if the video someone picked is also part of a bundle, the card
-  and the checkout say what the bundle contains, what it costs per video and how much it
-  saves ("₹399 for 2 videos · ₹199.50 each (₹498 separately)"), with a one-click
-  *Choose the bundle instead* button. The single video stays selectable — the buyer
-  decides; nothing is forced or auto-switched.
+- Conversion-focused storefront in this order: hero → **named bundles** → videos enabled for
+  single purchase → the checkout card → how it works → FAQ. Every buying option is shown
+  *before* anything informational, and bundles are always listed above individual videos.
+- **Bundle savings nudge**: if a single-sale video is also part of a bundle, the card and
+  checkout show the bundle price and any genuine saving, with a one-click *Choose the bundle
+  instead* button. Bundle-only videos stay in the bundle and are never shown with a false
+  individual price; the buyer decides whether to buy a single or a bundle.
 - One checkout card for whichever video or bundle the visitor picked
   (`?buy=video:3` / `?buy=bundle:1` — shareable, works without JavaScript).
 - **Purchased state**: a bundle a buyer already paid for is labelled *Purchased* and every
@@ -72,10 +71,13 @@ no build step, no Node.js required.
   conversion rate, active access passes, 14-day revenue chart, recent payments,
   library status (videos/bundles on sale).
 - **Videos**: add a video by pasting any YouTube link, set its own price, order and
-  visibility; sales count per video; deleting a video that was already sold *hides* it
-  instead of erasing a customer's access.
-- **Bundles**: name a set of videos and sell it for one price, with automatic savings
-  calculation and a warning if the bundle would cost more than buying separately.
+  visibility, and choose whether it is available for single purchase or only through bundles.
+  The setting is global per video (and defaults to enabled for existing videos); sales count
+  per video; deleting a video that was already sold *hides* it instead of erasing a customer's
+  access.
+- **Bundles**: name a set of videos and sell it for one price. The bundle editor also lets you
+  set each video's single-purchase availability (globally); savings and price checks compare
+  against individual prices only when every included video is available on its own.
   Editing a bundle is **live**: add a video and everyone who already bought that bundle
   gets it immediately (their `payment_videos` snapshot is topped up too); remove one and it
   leaves the bundle for future buyers while the people who already watched it keep it.
@@ -254,24 +256,28 @@ Visitor                App                                  Razorpay
 
 ### Videos, bundles and the savings nudge
 
-- Every video is its own product with its own price. A bundle is a *named* set of videos
-  sold for one payment; the name is what buyers see.
-- The storefront lists bundles first, then all single videos. Every bundle card shows the
-  **thumbnails of the videos inside it** (two side by side, with a "+N" badge when the
-  bundle holds more) — the same YouTube images the single-video cards use — so buyers can
-  see what the bundle contains before reading a word. Each video card also shows the
-  cheapest bundle that contains it: "Also in **Season One — Complete** — ₹399 for
-  2 videos, save ₹99".
-- Once a single video is selected, the checkout card explains the alternative
-  (price per video, total if bought separately, the saving) and offers
-  *Choose the bundle instead*. Selecting the bundle flips the message to the bundle's own
-  saving and points back to the single videos. With no JavaScript the same information is
-  server-rendered for the `?buy=` product.
-- Nothing is preselected behind the buyer's back: the checkout starts on the first single
-  video, and only their click (or `?buy=`) changes what is charged.
-- The saving is always *relative to buying the videos separately*. A bundle that would cost
-  more than its parts cannot be created in the admin panel, and any bundle with a zero or
-  negative difference simply shows no "Save" badge.
+- Each video has its own price and can be configured as **available for single purchase**
+  or **bundle only**. The setting is global per video (not per bundle), so it applies
+  everywhere that video appears. Existing videos default to individual sale after the v3→v4
+  database update. A bundle is a *named* set of videos sold for one payment; the name is
+  what buyers see.
+- The storefront lists bundles first, then videos enabled for single purchase. Every bundle
+  card shows the **thumbnails of the videos inside it** (two side by side, with a "+N" badge
+  when the bundle holds more). Bundle-only items are marked as such; prices/savings are
+  compared only when every included video can actually be bought separately. A single-sale
+  video card also points to the cheapest bundle that contains it.
+- Once a single video is selected, the checkout card explains the available bundle
+  alternative and its saving when every included video is also sold individually. If some
+  videos are bundle-only, the message says so rather than claiming an unavailable separate
+  price. *Choose the bundle instead* is always optional. With no JavaScript the same
+  information is server-rendered for the `?buy=` product.
+- Nothing is bought behind the buyer's back: the page may prepare the first available
+  product, but checkout stays closed until their click (or an explicit `?buy=` link). When
+  no videos are available singly, the first on-sale bundle is the prepared product.
+- A saving is shown only when **all** videos in the bundle are available individually. The
+  admin enforces that the bundle does not cost more than their combined single prices;
+  bundle-only or hidden videos are not treated as purchasable individual products or included
+  in the comparison.
 - Prices are re-read from the database in `api/create_order.php`; the client only sends
   `item_type` + `item_id`, so the nudge can never be used to change what is charged.
 
@@ -466,7 +472,7 @@ design is untouched.
 | `settings` | Single row (`id = 1`): branding, Razorpay keys, access days (`0` = lifetime), demo mode |
 | `admin_users` | Admin accounts (`password_hash`, `is_active`, last login metadata) |
 | `payments` | One row per checkout: customer, amount, status, Razorpay ids, access token + expiry (`NULL` = lifetime), product snapshot (`product_type`/`product_id`/`product_name`), IP/UA |
-| `videos` | The library: title, description, YouTube URL, **own price**, position, visibility |
+| `videos` | The library: title, description, YouTube URL, **own price**, position, visibility, and `allow_single_purchase` availability |
 | `bundles` | Named group of videos sold for one price (name is shown to buyers) |
 | `bundle_items` | Which videos belong to which bundle (unique per pair) |
 | `payment_videos` | What a payment unlocked (unique per payment+video). Kept up to date when a bundle is edited; for bundle purchases the live bundle is what the buyer sees |
@@ -484,6 +490,10 @@ copy of the same definition — after editing `Schema::tables()`, regenerate it 
 ```bash
 php tools/build-schema.php
 ```
+
+Schema **v4** adds `videos.allow_single_purchase`. The new column defaults to `1`, so existing
+videos remain available for single purchase after `update.php` applies the migration; set it to
+`0` to keep a video available only through its bundles.
 
 ---
 
@@ -691,11 +701,13 @@ Because payments touch money, verify these after any change:
    and `?buy=video:1` / `?buy=bundle:1` show the "You already own this" panel with no pay
    form. Buy one single video only → that card is *Owned*, the bundle still offers
    *Choose this bundle*, and the other video still sells normally.
-5. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle: the checkout
-   box names the bundle, shows the per-video price, the total if bought separately and the
-   saving — and the pay button still shows the single-video price. Click *Choose the bundle
-   instead* → the box switches to the bundle and the pay button updates; click the single
-   video again → it switches back. Nothing is chosen automatically.
+5. **Bundle nudge** — open `?buy=video:1` for a video that is inside a bundle where every
+   included video is available individually: the checkout box names the bundle, shows the
+   per-video price, the total if bought separately and the saving — while the pay button
+   still shows the single-video price. Click *Choose the bundle instead* → the box switches
+   to the bundle and the pay button updates; click the single video again → it switches back.
+   Nothing is chosen automatically. If a bundle includes a bundle-only video, verify the
+   comparison says so and does not show a separate-price total.
 6. **Validation** — empty form, 3-digit mobile → inline errors, no order created; a blank
    e-mail pays fine, a malformed one is rejected.
 7. **Product switch** — click *Buy video* on two different cards → the pay card and
@@ -718,21 +730,25 @@ Because payments touch money, verify these after any change:
 15. **Admin** — wrong password 5× → throttled; sign in → dashboard numbers match the payments.
 16. **Videos** — add a video, set a price, hide it (it leaves the shop but stays in the
     library of whoever bought it), delete a sold video → it is hidden, not erased.
-17. **Bundles** — create a bundle of two videos, try a price above the sum (rejected with the
-    savings message), save, buy it, then **add** a third video → the earlier buyer sees all
-    three on their next visit (the save flash says how many buyers were updated); remove one
-    → the earlier buyer still sees it, future buyers do not.
+17. **Bundles** — create a bundle of two videos, set one to *Bundle only* and confirm it
+    disappears from the individual shop while staying in the bundle. Confirm the setting
+    applies to that video across bundles; open a stale `?buy=video:N` link and confirm checkout
+    stays gated, and verify a direct single-video order is rejected. Add a hidden video to a
+    bundle and confirm it is not counted in a separate-price comparison. When every video is
+    individually available, try a price above the sum (rejected with the savings message); save,
+    buy it, then **add** a third video → the earlier buyer sees all three on their next visit.
+    Remove one → existing buyers keep the snapshot.
 18. **Filters** — search by partial e-mail and by **product name**, filter by status and date
     range, sort each column, paginate, export CSV and open it in Excel.
 19. **Logo upload** — PNG under 2 MB replaces the logo everywhere (site, admin, manifest);
    `.php` renamed to `.png` is rejected; 3 MB file is rejected; remove checkbox restores the mark.
 20. **Webhook** — Razorpay dashboard "Send test webhook" → 200 response, event in the timeline.
 21. **Demo mode** — on → simulated checkout works; off → button/endpoint refuse without keys.
-22. **Upgrade path (v1/v2 → v3)** — restore an old dump into a test database, load the site → "Database update
-    required", open `update.php` → items listed → Run the update → old payment still visible in
-    *Admin → Payments*, old logo still shown, the old YouTube link became a priced video in
-    *Admin → Videos*, old successful payments list that video under **Unlocked videos** →
-    checkout completes. Run `update.php` again → "Everything is up to date".
+22. **Upgrade path (v1/v2/v3 → v4)** — restore an old dump into a test database, load the site →
+    "Database update required", open `update.php` → items listed → Run the update → old payment
+    still visible in *Admin → Payments*, old logo still shown, a legacy YouTube link becomes a
+    priced video in *Admin → Videos*, and existing v3 videos remain available individually by
+    default. Run `update.php` again → "Everything is up to date".
 
 ---
 

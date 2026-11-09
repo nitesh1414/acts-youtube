@@ -16,12 +16,13 @@ if ($id > 0 && $video === null) {
 }
 
 $form = $video !== null ? $video : [
-    'title'       => '',
-    'description' => '',
-    'youtube_url' => '',
-    'price'       => '',
-    'position'    => count($catalog->videos(false)) + 1,
-    'is_active'   => true,
+    'title'                  => '',
+    'description'            => '',
+    'youtube_url'            => '',
+    'price'                  => '',
+    'position'               => count($catalog->videos(false)) + 1,
+    'is_active'              => true,
+    'allow_single_purchase'  => true,
 ];
 $errors = [];
 
@@ -40,12 +41,13 @@ if (is_post()) {
 
     if ($action === 'save') {
         $form = [
-            'title'       => post_str('title'),
-            'description' => post_str('description'),
-            'youtube_url' => post_str('youtube_url'),
-            'price'       => post_str('price'),
-            'position'    => post_str('position', '0'),
-            'is_active'   => !empty($_POST['is_active']),
+            'title'                  => post_str('title'),
+            'description'            => post_str('description'),
+            'youtube_url'            => post_str('youtube_url'),
+            'price'                  => post_str('price'),
+            'position'               => post_str('position', '0'),
+            'is_active'              => !empty($_POST['is_active']),
+            'allow_single_purchase'  => !empty($_POST['allow_single_purchase']),
         ];
 
         if (text_length($form['title']) < 2 || text_length($form['title']) > 160) {
@@ -63,12 +65,13 @@ if (is_post()) {
 
         if (empty($errors)) {
             $data = [
-                'title'       => $form['title'],
-                'description' => $form['description'],
-                'youtube_url' => $form['youtube_url'],
-                'price'       => (float) $form['price'],
-                'position'    => (int) $form['position'],
-                'is_active'   => $form['is_active'],
+                'title'                  => $form['title'],
+                'description'            => $form['description'],
+                'youtube_url'            => $form['youtube_url'],
+                'price'                  => (float) $form['price'],
+                'position'               => (int) $form['position'],
+                'is_active'              => $form['is_active'],
+                'allow_single_purchase'  => $form['allow_single_purchase'],
             ];
 
             try {
@@ -84,8 +87,12 @@ if (is_post()) {
                 clear_old_input();
                 redirect('admin/videos.php');
             } catch (Throwable $e) {
-                app_log('error', 'Could not save video: ' . $e->getMessage());
-                $errors['general'] = 'The video could not be saved. Please try again.';
+                if ($e instanceof DatabaseException) {
+                    $errors['general'] = database_error_hint($e);
+                } else {
+                    app_log('error', 'Could not save video: ' . $e->getMessage());
+                    $errors['general'] = 'The video could not be saved because of an unexpected application error. Please try again.';
+                }
             }
         }
     }

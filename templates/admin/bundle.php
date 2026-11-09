@@ -59,29 +59,46 @@ foreach ($videos as $video) {
                         <span>There are no videos yet. <a href="<?= e(url('admin/video.php')) ?>">Add one first</a>.</span>
                     </div>
                 <?php else: ?>
+                    <p class="hint">For each video, choose whether buyers may also purchase it on its own. This setting applies everywhere that video appears, not only in this bundle.</p>
                     <div class="picker" data-prices="<?= e(json_encode($prices)) ?>">
                         <?php foreach ($videos as $video): ?>
-                            <label class="picker__item <?= !$video['is_active'] ? 'is-muted' : '' ?>">
-                                <input type="checkbox" name="video_ids[]" value="<?= (int) $video['id'] ?>"
-                                    <?= isset($chosen[(int) $video['id']]) ? 'checked' : '' ?>>
-                                <?php if ($video['thumbnail'] !== ''): ?>
-                                    <img src="<?= e($video['thumbnail']) ?>" alt="" loading="lazy" width="80" height="45">
-                                <?php else: ?>
-                                    <span class="picker__thumb"><?= icon('youtube', 16) ?></span>
-                                <?php endif; ?>
-                                <span class="picker__text">
-                                    <strong><?= e($video['title']) ?></strong>
-                                    <span class="muted tiny">
-                                        <?= e(money((float) $video['price'], $currency)) ?>
-                                        <?= $video['is_active'] ? '' : ' · hidden from shop' ?>
+                            <?php
+                            $videoId = (int) $video['id'];
+                            $allowSingle = array_key_exists($videoId, $form['allow_single_purchase'])
+                                ? !empty($form['allow_single_purchase'][$videoId])
+                                : !empty($video['allow_single_purchase']);
+                            ?>
+                            <div class="picker__item <?= !$video['is_active'] ? 'is-muted' : '' ?>">
+                                <label class="picker__select" for="bundle-video-<?= $videoId ?>">
+                                    <input id="bundle-video-<?= $videoId ?>" type="checkbox" name="video_ids[]" value="<?= $videoId ?>"
+                                        <?= isset($chosen[$videoId]) ? 'checked' : '' ?>>
+                                    <?php if ($video['thumbnail'] !== ''): ?>
+                                        <img src="<?= e($video['thumbnail']) ?>" alt="" loading="lazy" width="80" height="45">
+                                    <?php else: ?>
+                                        <span class="picker__thumb"><?= icon('youtube', 16) ?></span>
+                                    <?php endif; ?>
+                                    <span class="picker__text">
+                                        <strong><?= e($video['title']) ?></strong>
+                                        <span class="muted tiny">
+                                            <?= e(money((float) $video['price'], $currency)) ?>
+                                            <?= $video['is_active'] ? '' : ' · hidden from shop' ?>
+                                        </span>
                                     </span>
-                                </span>
-                                <span class="picker__check"><?= icon('check', 14) ?></span>
-                            </label>
+                                    <span class="picker__check"><?= icon('check', 14) ?></span>
+                                </label>
+                                <label class="picker__single" for="allow-single-<?= $videoId ?>">
+                                    <span>Single purchase</span>
+                                    <select class="input" id="allow-single-<?= $videoId ?>" name="allow_single_purchase[<?= $videoId ?>]"
+                                            aria-label="Single purchase availability for <?= e($video['title']) ?>">
+                                        <option value="1" <?= $allowSingle ? 'selected' : '' ?>>Also sell on its own</option>
+                                        <option value="0" <?= !$allowSingle ? 'selected' : '' ?>>Bundle only</option>
+                                    </select>
+                                </label>
+                            </div>
                         <?php endforeach; ?>
                     </div>
                     <p class="hint">
-                        Running total if bought separately:
+                        Total for the selected videos that are available individually:
                         <strong id="bundle-single-total" data-currency="<?= e($currency) ?>">—</strong>
                     </p>
                 <?php endif; ?>
@@ -98,7 +115,7 @@ foreach ($videos as $video) {
                 <input class="input" id="price" name="price" type="number" min="1" max="500000" step="0.01" required
                        value="<?= e($value('price')) ?>">
                 <?php if ($error('price')): ?><p class="field__error"><?= e($error('price')) ?></p><?php endif; ?>
-                <p class="hint">One payment for every video in the bundle. Must not exceed the total of the individual prices.</p>
+                <p class="hint">One payment for every video. When all included videos are available individually, the bundle price must not exceed their combined single prices.</p>
                 <p class="hint">
                     <?= icon('refresh', 14) ?>
                     Saving is live: everyone who already paid for this bundle gets any video you add here, straight away.

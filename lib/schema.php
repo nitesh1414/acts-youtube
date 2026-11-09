@@ -13,7 +13,7 @@
 final class Schema
 {
     /** Bump when the definition below changes (invalidates the cached check). */
-    const VERSION = 3;
+    const VERSION = 4;
 
     /**
      * Column definitions, primary key and indexes for every table.
@@ -122,15 +122,16 @@ final class Schema
 
             'videos' => [
                 'columns' => [
-                    'id'          => 'INT UNSIGNED NOT NULL AUTO_INCREMENT',
-                    'title'       => 'VARCHAR(160) NOT NULL',
-                    'description' => 'TEXT DEFAULT NULL',
-                    'youtube_url' => 'VARCHAR(255) NOT NULL',
-                    'price'       => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
-                    'position'    => 'INT NOT NULL DEFAULT 0',
-                    'is_active'   => 'TINYINT(1) NOT NULL DEFAULT 1',
-                    'created_at'  => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
-                    'updated_at'  => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+                    'id'                     => 'INT UNSIGNED NOT NULL AUTO_INCREMENT',
+                    'title'                  => 'VARCHAR(160) NOT NULL',
+                    'description'            => 'TEXT DEFAULT NULL',
+                    'youtube_url'            => 'VARCHAR(255) NOT NULL',
+                    'price'                  => 'DECIMAL(10,2) NOT NULL DEFAULT 0.00',
+                    'position'               => 'INT NOT NULL DEFAULT 0',
+                    'is_active'              => 'TINYINT(1) NOT NULL DEFAULT 1',
+                    'allow_single_purchase'  => 'TINYINT(1) NOT NULL DEFAULT 1',
+                    'created_at'             => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+                    'updated_at'             => 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
                 ],
                 'primary' => 'id',
                 'indexes' => [
@@ -509,7 +510,7 @@ final class Schema
             }
         }
 
-        // --- Catalog bootstrap (v2 single video → v3 library) -----------------
+        // --- Catalog bootstrap (legacy single video → v3 library) ---------------
         // Creates one video from the old "YouTube video link" setting and gives
         // every buyer who already paid access to it, so nothing that worked
         // before this update stops working.
@@ -568,12 +569,13 @@ final class Schema
             $price = isset($settings['amount']) ? (float) $settings['amount'] : 199.0;
 
             $videoId = (int) $db->insert('videos', [
-                'title'       => db_limit($title, 160),
-                'description' => 'Your first video. Edit it in Admin → Videos.',
-                'youtube_url' => db_limit($videoUrl, 255),
-                'price'       => number_format(max(0, $price), 2, '.', ''),
-                'position'    => 1,
-                'is_active'   => 1,
+                'title'                  => db_limit($title, 160),
+                'description'            => 'Your first video. Edit it in Admin → Videos.',
+                'youtube_url'            => db_limit($videoUrl, 255),
+                'price'                  => number_format(max(0, $price), 2, '.', ''),
+                'position'               => 1,
+                'is_active'              => 1,
+                'allow_single_purchase'  => 1,
             ]);
             $changes[] = 'Created the first video from your existing YouTube link.';
             $log('Created the first video from the existing YouTube link.');
